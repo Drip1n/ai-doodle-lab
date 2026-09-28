@@ -11,6 +11,13 @@ const DB_VERSION = 1;
 const EXAMPLES = 'examples';
 const META = 'meta';
 
+/**
+ * Opening can hang indefinitely -- another tab holding an old version open, a
+ * delete still pending -- without ever firing success, error or blocked. The
+ * app must never wait forever for storage, so give up and carry on in memory.
+ */
+const OPEN_TIMEOUT_MS = 4000;
+
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 function openDb(): Promise<IDBDatabase | null> {
@@ -20,7 +27,28 @@ function openDb(): Promise<IDBDatabase | null> {
       resolve(null);
       return;
     }
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    let settled = false;
+    const finish = (db: IDBDatabase | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(db);
+    };
+
+    const timer = setTimeout(() => finish(null), OPEN_TIMEOUT_MS);
+    const done = (db: IDBDatabase | null) => {
+      clearTimeout(timer);
+      finish(db);
+    };
+
+    let request: IDBOpenDBRequest;
+    try {
+      request = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch {
+      done(null);
+      return;
+    }
+
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(EXAMPLES)) {
@@ -30,8 +58,9 @@ function openDb(): Promise<IDBDatabase | null> {
         db.createObjectStore(META, { keyPath: 'key' });
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => resolve(null);
+    request.onsuccess = () => done(request.result);
+    request.onerror = () => done(null);
+    request.onblocked = () => done(null);
   });
   return dbPromise;
 }

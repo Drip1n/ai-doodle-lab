@@ -3,6 +3,7 @@ import type { AiLab } from '../hooks/useAiLab';
 import type { ClassId, Prediction } from '../types';
 import { DrawingCanvas, type DrawingCanvasHandle } from './DrawingCanvas';
 import { PredictionResult } from './PredictionResult';
+import { ClassLabel } from './ClassLabel';
 
 type Phase = 'drawing' | 'thinking' | 'guessed' | 'correcting' | 'done';
 
@@ -19,6 +20,7 @@ export function DrawChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach: (
   const canvasRef = useRef<DrawingCanvasHandle>(null);
   const embeddingRef = useRef<Float32Array | null>(null);
   const mountedRef = useRef(true);
+  const busyRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -76,11 +78,16 @@ export function DrawChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach: (
   const teachFromMistake = async () => {
     const canvas = canvasRef.current?.getCanvas();
     if (!canvas || !correctionId) return;
+    // Guard against a double-click teaching the same drawing twice.
+    if (busyRef.current) return;
+    busyRef.current = true;
     try {
       await lab.teach(canvas, correctionId, 'mistake', embeddingRef.current ?? undefined);
       setTaught(true);
     } catch (teachError) {
       setError(teachError instanceof Error ? teachError.message : 'Could not save that example.');
+    } finally {
+      busyRef.current = false;
     }
   };
 
@@ -100,8 +107,7 @@ export function DrawChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach: (
         <ul className="lockList">
           {lab.classes.map((def) => (
             <li key={def.id} className={(lab.counts[def.id] ?? 0) >= lab.minExamplesPerClass ? 'done' : ''}>
-              <span aria-hidden="true">{def.emoji}</span> {def.name}: {lab.counts[def.id] ?? 0}/
-              {lab.minExamplesPerClass}
+              <ClassLabel def={def} />: {lab.counts[def.id] ?? 0}/{lab.minExamplesPerClass}
               {(lab.counts[def.id] ?? 0) >= lab.minExamplesPerClass ? ' ✓' : ''}
             </li>
           ))}
@@ -185,7 +191,7 @@ export function DrawChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach: (
                       style={{ '--accent': def.accent, '--accent-soft': def.accentSoft } as React.CSSProperties}
                       onClick={() => setCorrectionId(def.id)}
                     >
-                      <span aria-hidden="true">{def.emoji}</span> {def.name}
+                      <ClassLabel def={def} />
                     </button>
                   ))}
                 </div>

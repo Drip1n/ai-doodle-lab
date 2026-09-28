@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AiLab } from '../hooks/useAiLab';
 import type { ClassId } from '../types';
 import { loadImageFile } from '../ml/imageProcessing';
+import { resolveSelection } from '../lib/dataset';
 import { DrawingCanvas, type DrawingCanvasHandle } from './DrawingCanvas';
 import { ClassCard } from './ClassCard';
 import { AddClassCard } from './AddClassCard';
@@ -27,17 +28,16 @@ export function TeachStage({ lab, focusRequest }: { lab: AiLab; focusRequest?: F
   const canvasRef = useRef<DrawingCanvasHandle>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<number | null>(null);
+  const busyRef = useRef(false);
 
   useEffect(() => () => {
     if (timerRef.current) window.clearTimeout(timerRef.current);
   }, []);
 
-  // Keep the selection valid as classes are created, renamed away from, or deleted.
+  // Keep the selection valid as categories are created or deleted.
   useEffect(() => {
-    if (lab.classes.length === 0) return;
-    if (!selected || !lab.classes.some((def) => def.id === selected)) {
-      setSelected(lab.classes[0].id);
-    }
+    const next = resolveSelection(lab.classes, selected);
+    if (next !== selected) setSelected(next);
   }, [lab.classes, selected]);
 
   // A request from the Learn page to jump straight into teaching one category.
@@ -51,7 +51,8 @@ export function TeachStage({ lab, focusRequest }: { lab: AiLab; focusRequest?: F
   const activeClass = lab.classes.find((def) => def.id === selected) ?? lab.classes[0] ?? null;
   const modelReady = lab.modelStatus.state === 'ready';
   const hasSomething = uploaded !== null || dirty;
-  const canTeach = modelReady && hasSomething && teachState === 'idle' && activeClass !== null;
+  // Only an in-flight teach blocks the button; the success flash must not.
+  const canTeach = modelReady && hasSomething && teachState !== 'teaching' && activeClass !== null;
   const deleteTargetDef = lab.classes.find((def) => def.id === deleteTarget) ?? null;
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,20 +71,26 @@ export function TeachStage({ lab, focusRequest }: { lab: AiLab; focusRequest?: F
   const handleTeach = async () => {
     const source = uploaded ?? canvasRef.current?.getCanvas();
     if (!source || !activeClass) return;
+    // A fast double-click can outrun the disabled state and teach twice.
+    if (busyRef.current) return;
+    busyRef.current = true;
     setError(null);
     setTeachState('teaching');
+    if (timerRef.current) window.clearTimeout(timerRef.current);
     try {
       await lab.teach(source, activeClass.id, uploaded ? 'upload' : 'drawing');
+      // Reset the workspace immediately. Clearing it on a timer instead used
+      // to wipe whatever the child had already started drawing next.
+      canvasRef.current?.clear();
+      setUploaded(null);
+      setDirty(false);
       setTeachState('done');
-      timerRef.current = window.setTimeout(() => {
-        setTeachState('idle');
-        canvasRef.current?.clear();
-        setUploaded(null);
-        setDirty(false);
-      }, 1100);
+      timerRef.current = window.setTimeout(() => setTeachState('idle'), 1100);
     } catch (teachError) {
       setTeachState('idle');
       setError(teachError instanceof Error ? teachError.message : 'Something went wrong.');
+    } finally {
+      busyRef.current = false;
     }
   };
 
@@ -115,6 +122,7 @@ export function TeachStage({ lab, focusRequest }: { lab: AiLab; focusRequest?: F
             count={lab.counts[def.id] ?? 0}
             selected={def.id === selected}
             canDelete={lab.canDeleteClass}
+            minClasses={lab.minClasses}
             onSelect={() => setSelected(def.id)}
             onRename={(name) => lab.renameClass(def.id, name)}
             onChangeEmoji={(emoji) => lab.changeEmoji(def.id, emoji)}
@@ -127,7 +135,12 @@ export function TeachStage({ lab, focusRequest }: { lab: AiLab; focusRequest?: F
       <div className="workGrid">
         <section className="panel workspace" style={{ borderColor: activeClass.accent }}>
           <p className="workspaceBadge" style={{ background: activeClass.accentSoft, color: activeClass.accent }}>
-            <span aria-hidden="true">{activeClass.emoji}</span> Teaching: {activeClass.name}
+            {activeClass.emoji && (
+              <span className="classLabelIcon" aria-hidden="true">
+                {activeClass.emoji}
+              </span>
+            )}
+            {`Teaching: ${activeClass.name}`}
           </p>
 
           {uploaded ? (
@@ -169,9 +182,7 @@ export function TeachStage({ lab, focusRequest }: { lab: AiLab; focusRequest?: F
               onClick={handleTeach}
               disabled={!canTeach}
             >
-              {teachState === 'teaching' && 'Teaching AI…'}
-              {teachState === 'done' && 'Learned! 🧠'}
-              {teachState === 'idle' && `Teach AI this ${activeClass.name}`}
+              {teachState === 'teaching' ? 'Teaching AI…' : `Teach AI this ${activeClass.name}`}
             </button>
           </div>
 
@@ -206,8 +217,8 @@ export function TeachStage({ lab, focusRequest }: { lab: AiLab; focusRequest?: F
       {deleteTargetDef && (
         <ConfirmDialog
           title={`Delete ${deleteTargetDef.name}?`}
-          message="This will also forget all examples for this category."
-          confirmLabel="Yes, delete it"
+          message="This will also forget all examples the AI learned for this category."
+          confirmLabel="Delete category"
           onConfirm={() => {
             void lab.deleteClass(deleteTargetDef.id);
             setDeleteTarget(null);

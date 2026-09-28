@@ -99,8 +99,13 @@ export async function predict(
   }
 }
 
-/** Forgets every example taught under this class id. Used when a class is deleted. */
+/**
+ * Forgets every example taught under this class id. Used when a class is
+ * deleted. `clearClass` throws for a label it has never seen, which is the
+ * normal case for a category with no examples yet, so ask first.
+ */
 export function removeClass(classId: ClassId): void {
+  if (!Object.prototype.hasOwnProperty.call(knn.getClassExampleCount(), classId)) return;
   knn.clearClass(classId);
 }
 

@@ -1,4 +1,5 @@
 import type { ClassDef, ClassId } from '../types';
+import { ClassLabel } from './ClassLabel';
 
 interface Props {
   classes: ClassDef[];
@@ -17,7 +18,7 @@ export function DatasetSummary({ classes, counts, total, title = 'Your dataset' 
         {classes.map((def) => (
           <li key={def.id} className="datasetRow">
             <span className="datasetLabel">
-              <span aria-hidden="true">{def.emoji}</span> {def.name}
+              <ClassLabel def={def} />
             </span>
             <span className="datasetBarTrack">
               <span

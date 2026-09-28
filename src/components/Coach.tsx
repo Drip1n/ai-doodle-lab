@@ -19,14 +19,14 @@ function datasetTip(
     };
   }
 
-  const values = classes.map((def) => counts[def.id]);
+  const values = classes.map((def) => counts[def.id] ?? 0);
   const min = Math.min(...values);
   const max = Math.max(...values);
 
-  const thin = classes.find((def) => counts[def.id] < 3);
+  const thin = classes.find((def) => (counts[def.id] ?? 0) < 3);
   if (thin) {
     return {
-      emoji: thin.emoji,
+      emoji: thin.emoji ?? '✏️',
       text: `Give the AI a few different examples of ${thin.name}.`,
     };
   }

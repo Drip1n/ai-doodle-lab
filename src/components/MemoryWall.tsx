@@ -1,4 +1,5 @@
 import type { ClassDef, ClassId, Example } from '../types';
+import { ClassLabel } from './ClassLabel';
 
 interface Props {
   classes: ClassDef[];
@@ -28,7 +29,7 @@ export function MemoryWall({ classes, counts, examples }: Props) {
         return (
           <div key={def.id} className="memoryGroup">
             <p className="memoryHeading">
-              <span aria-hidden="true">{def.emoji}</span> {def.name}
+              <ClassLabel def={def} />
               <span className="memoryCount" style={{ background: def.accentSoft, color: def.accent }}>
                 {counts[def.id]} {counts[def.id] === 1 ? 'example' : 'examples'}
               </span>
@@ -54,7 +55,8 @@ export function MemoryWall({ classes, counts, examples }: Props) {
 
       {laggingClass && (
         <p className="memoryTip">
-          Your AI has seen fewer {laggingClass.name}s. Try teaching it more {laggingClass.emoji}
+          Your AI has seen fewer {laggingClass.name}s. Try teaching it more{' '}
+          {laggingClass.emoji ?? '✏️'}
         </p>
       )}
     </section>

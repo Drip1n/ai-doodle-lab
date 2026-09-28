@@ -7,9 +7,10 @@ interface Props {
   count: number;
   selected: boolean;
   canDelete: boolean;
+  minClasses: number;
   onSelect: () => void;
   onRename: (name: string) => void;
-  onChangeEmoji: (emoji: string) => void;
+  onChangeEmoji: (emoji: string | undefined) => void;
   onRequestDelete: () => void;
 }
 
@@ -18,6 +19,7 @@ export function ClassCard({
   count,
   selected,
   canDelete,
+  minClasses,
   onSelect,
   onRename,
   onChangeEmoji,
@@ -53,7 +55,7 @@ export function ClassCard({
         aria-pressed={selected}
         disabled={editing}
       >
-        <span className="classEmoji">{def.emoji}</span>
+        {def.emoji && <span className="classEmoji">{def.emoji}</span>}
         <span className="className">{def.name}</span>
         <span className="classCount">
           {count} {count === 1 ? 'example' : 'examples'}
@@ -100,18 +102,19 @@ export function ClassCard({
             }}
           />
 
-          <p className="classEditorLabel">Emoji</p>
+          <p className="classEditorLabel">Icon</p>
           <EmojiPicker value={def.emoji} onChange={onChangeEmoji} />
 
-          <button
-            type="button"
-            className="classDeleteBtn"
-            onClick={onRequestDelete}
-            disabled={!canDelete}
-            title={canDelete ? undefined : 'Keep at least two categories'}
-          >
-            🗑️ Delete category
-          </button>
+          {canDelete ? (
+            <button type="button" className="classDeleteBtn" onClick={onRequestDelete}>
+              🗑️ Delete category
+            </button>
+          ) : (
+            <p className="classDeleteBlocked">
+              Your AI needs at least {minClasses} categories to compare things, so this one
+              can&rsquo;t be deleted. Add another category first.
+            </p>
+          )}
         </div>
       )}
     </div>

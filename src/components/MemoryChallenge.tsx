@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AiLab } from '../hooks/useAiLab';
 import type { ClassId, Example } from '../types';
+import { ClassLabel } from './ClassLabel';
 
 const AUTO_REVEAL_MS = 2200;
 
@@ -17,10 +18,14 @@ export function MemoryChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
     setAnswerId(null);
   };
 
+  // Pick a round when one is needed, and abandon a round whose example has
+  // since been deleted (its category was removed while this was on screen).
+  const stale = current !== null && !lab.examples.some((example) => example.id === current.id);
+
   useEffect(() => {
-    if (ready && !current) pickNew();
+    if (ready && (!current || stale)) pickNew();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready]);
+  }, [ready, stale]);
 
   useEffect(() => {
     if (!current || imageRevealed) return;
@@ -44,9 +49,10 @@ export function MemoryChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
     );
   }
 
-  if (!current) return null;
+  if (!current || stale) return null;
 
   const correctDef = lab.classes.find((def) => def.id === current.classId);
+  if (!correctDef) return null;
   const answered = answerId !== null;
   const wasCorrect = answered && answerId === current.classId;
   const successRate =
@@ -90,17 +96,17 @@ export function MemoryChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
                 lab.recordMemoryChallenge(def.id === current.classId);
               }}
             >
-              <span aria-hidden="true">{def.emoji}</span> {def.name}
+              <ClassLabel def={def} />
             </button>
           ))}
         </div>
 
-        {answered && correctDef && (
+        {answered && (
           <div className={`verdictOutcome ${wasCorrect ? 'isCorrect' : 'isWrong'}`}>
             <p className="memoryRevealFact">
               This example was taught to the AI as{' '}
               <strong>
-                {correctDef.emoji} {correctDef.name}
+                <ClassLabel def={correctDef} />
               </strong>
               .
             </p>

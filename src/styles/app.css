@@ -314,6 +314,41 @@
   cursor: not-allowed;
 }
 
+.classLabelIcon {
+  margin-right: 0.35em;
+}
+
+.classDeleteBlocked {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+.emojiPickerWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.noIconOption {
+  align-self: flex-start;
+  background: var(--bg-tint);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.noIconOption.isActive {
+  border-color: var(--accent, var(--brand));
+  background: var(--accent-soft, var(--brand-soft));
+  color: var(--accent, var(--brand));
+}
+
 .emojiPicker {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -1439,10 +1474,16 @@
   .classRename {
     position: static;
     flex: none;
+    order: 1;
     margin-right: 8px;
   }
 
   .classCardBody {
+    /* Share the row with the edit button instead of pushing it onto its own
+       line: a zero basis stops the content width forcing a wrap. */
+    width: auto;
+    flex: 1 1 0;
+    min-width: 0;
     flex-direction: row;
     justify-content: flex-start;
     gap: 14px;

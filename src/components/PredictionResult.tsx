@@ -1,4 +1,5 @@
 import type { ClassDef, ClassId, Prediction } from '../types';
+import { ClassLabel } from './ClassLabel';
 
 interface Props {
   prediction: Prediction;
@@ -6,18 +7,20 @@ interface Props {
 }
 
 export function PredictionResult({ prediction, classes }: Props) {
-  const winner = classes.find((def) => def.id === prediction.classId) ?? classes[0];
+  const winner = classes.find((def) => def.id === prediction.classId);
+  if (!winner) return null;
+
   const ordered = [...classes].sort(
-    (a, b) => prediction.confidences[b.id] - prediction.confidences[a.id],
+    (a, b) => (prediction.confidences[b.id] ?? 0) - (prediction.confidences[a.id] ?? 0),
   );
 
-  const percent = (id: ClassId) => Math.round(prediction.confidences[id] * 100);
+  const percent = (id: ClassId) => Math.round((prediction.confidences[id] ?? 0) * 100);
 
   return (
     <div className="prediction">
       <p className="predictionLead">🤖 I think it&rsquo;s…</p>
       <p className="predictionWinner" style={{ color: winner.accent }}>
-        <span aria-hidden="true">{winner.emoji}</span> {winner.name.toUpperCase()}
+        <ClassLabel def={winner} uppercase />
         <span className="predictionPercent">{percent(winner.id)}%</span>
       </p>
 
@@ -25,7 +28,7 @@ export function PredictionResult({ prediction, classes }: Props) {
         {ordered.map((def) => (
           <li key={def.id} className="confidenceRow">
             <span className="confidenceLabel">
-              <span aria-hidden="true">{def.emoji}</span> {def.name}
+              <ClassLabel def={def} />
             </span>
             <span className="confidenceTrack">
               <span

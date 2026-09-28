@@ -1,3 +1,6 @@
+import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
+
 interface Props {
   title: string;
   message: string;
@@ -7,7 +10,18 @@ interface Props {
 }
 
 export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCancel }: Props) {
-  return (
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  // Rendered into <body>: an ancestor with a transform (the stage's entry
+  // animation) would otherwise become the containing block for this fixed
+  // overlay and push the dialog off-screen.
+  return createPortal(
     <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={title}>
       <div className="modalCard">
         <h2 className="modalTitle">{title}</h2>
@@ -21,6 +35,7 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCance
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

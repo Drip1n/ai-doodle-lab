@@ -9,7 +9,8 @@ export interface LearningClass {
   id: ClassId;
   /** Editable by the child. */
   name: string;
-  emoji: string;
+  /** Undefined means "no icon" -- the name is then shown on its own. */
+  emoji?: string;
   /** CSS colour used to give every class its own identity. */
   accent: string;
   accentSoft: string;

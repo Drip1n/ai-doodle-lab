@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  COLOR_PALETTE,
   MAX_CLASSES,
   MIN_CLASSES,
-  STARTER_POOL,
   type ChallengeStats,
   type ClassId,
   type Example,
@@ -12,43 +10,23 @@ import {
   type ModelStatus,
   type Prediction,
 } from '../types';
+import {
+  countExamples,
+  createClass,
+  newId,
+  pickStarterClasses,
+  recordStat,
+  removeClassFrom,
+  renameClassIn,
+  setEmojiIn,
+  splitOrphanExamples,
+} from '../lib/dataset';
 import * as ml from '../ml/classifier';
 import { toThumbnail } from '../ml/imageProcessing';
 import * as db from '../storage/db';
 
 const MIN_EXAMPLES_PER_CLASS = 2;
 const EMPTY_STATS: ChallengeStats = { attempts: 0, correct: 0 };
-
-function newId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function shuffle<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
-/** Three random, unique starter categories -- re-rolled only on first run or reset. */
-function pickStarterClasses(): LearningClass[] {
-  return shuffle(STARTER_POOL)
-    .slice(0, 3)
-    .map((pick, index) => ({
-      id: pick.id,
-      name: pick.name,
-      emoji: pick.emoji,
-      accent: COLOR_PALETTE[index % COLOR_PALETTE.length].accent,
-      accentSoft: COLOR_PALETTE[index % COLOR_PALETTE.length].accentSoft,
-    }));
-}
-
-function nextColor(existing: LearningClass[]): { accent: string; accentSoft: string } {
-  const used = new Set(existing.map((def) => def.accent));
-  return COLOR_PALETTE.find((color) => !used.has(color.accent)) ?? COLOR_PALETTE[existing.length % COLOR_PALETTE.length];
-}
 
 export interface TeachResult {
   example: Example;
@@ -83,11 +61,15 @@ export function useAiLab() {
       }
       setClasses(activeClasses);
 
-      if (storedExamples.length) {
-        // Replay the saved embeddings so the AI remembers last session.
-        ml.rebuildFrom(storedExamples);
-        setExamples(storedExamples);
-      }
+      // Examples pointing at a category that no longer exists would hand the
+      // classifier a label the UI cannot render, so drop them for good.
+      const { kept, orphans } = splitOrphanExamples(activeClasses, storedExamples);
+      for (const orphan of orphans) void db.deleteExample(orphan.id);
+
+      // Replay the saved embeddings so the AI remembers last session.
+      ml.rebuildFrom(kept);
+      setExamples(kept);
+
       if (storedStats) setStats(storedStats);
       if (storedMemoryStats) setMemoryStats(storedMemoryStats);
 
@@ -107,14 +89,7 @@ export function useAiLab() {
     void boot();
   }, [boot]);
 
-  const counts = useMemo(() => {
-    const result: Record<ClassId, number> = {};
-    for (const def of classes) result[def.id] = 0;
-    for (const example of examples) {
-      result[example.classId] = (result[example.classId] ?? 0) + 1;
-    }
-    return result;
-  }, [classes, examples]);
+  const counts = useMemo(() => countExamples(classes, examples), [classes, examples]);
 
   const total = examples.length;
 
@@ -168,10 +143,7 @@ export function useAiLab() {
 
   const recordChallenge = useCallback((wasCorrect: boolean) => {
     setStats((current) => {
-      const next = {
-        attempts: current.attempts + 1,
-        correct: current.correct + (wasCorrect ? 1 : 0),
-      };
+      const next = recordStat(current, wasCorrect);
       void db.saveStats(next);
       return next;
     });
@@ -179,10 +151,7 @@ export function useAiLab() {
 
   const recordMemoryChallenge = useCallback((wasCorrect: boolean) => {
     setMemoryStats((current) => {
-      const next = {
-        attempts: current.attempts + 1,
-        correct: current.correct + (wasCorrect ? 1 : 0),
-      };
+      const next = recordStat(current, wasCorrect);
       void db.saveMemoryStats(next);
       return next;
     });
@@ -190,31 +159,24 @@ export function useAiLab() {
 
   const renameClass = useCallback((id: ClassId, name: string) => {
     setClasses((current) => {
-      const next = current.map((def) => (def.id === id ? { ...def, name: name.trim() || def.name } : def));
+      const next = renameClassIn(current, id, name);
       void db.saveClasses(next);
       return next;
     });
   }, []);
 
-  const changeEmoji = useCallback((id: ClassId, emoji: string) => {
+  const changeEmoji = useCallback((id: ClassId, emoji: string | undefined) => {
     setClasses((current) => {
-      const next = current.map((def) => (def.id === id ? { ...def, emoji } : def));
+      const next = setEmojiIn(current, id, emoji);
       void db.saveClasses(next);
       return next;
     });
   }, []);
 
   const addClass = useCallback(
-    (name: string, emoji: string): ClassId | null => {
-      if (classes.length >= MAX_CLASSES) return null;
-      const color = nextColor(classes);
-      const created: LearningClass = {
-        id: newId(),
-        name: name.trim() || 'New',
-        emoji: emoji || '❓',
-        accent: color.accent,
-        accentSoft: color.accentSoft,
-      };
+    (name: string, emoji: string | undefined): ClassId | null => {
+      const created = createClass(classes, name, emoji);
+      if (!created) return null;
       setClasses((current) => {
         const next = [...current, created];
         void db.saveClasses(next);
@@ -225,16 +187,32 @@ export function useAiLab() {
     [classes],
   );
 
-  const deleteClass = useCallback(async (id: ClassId) => {
-    ml.removeClass(id);
-    setClasses((current) => {
-      const next = current.filter((def) => def.id !== id);
-      void db.saveClasses(next);
-      return next;
-    });
-    setExamples((current) => current.filter((example) => example.classId !== id));
-    await db.deleteExamplesForClass(id);
-  }, []);
+  const deleteClass = useCallback(
+    async (id: ClassId) => {
+      // Forget the classifier's copy first, but never let that stop the rest:
+      // leaving the category on screen with its data half-gone is far worse.
+      try {
+        ml.removeClass(id);
+      } catch {
+        // The classifier held nothing under this label; nothing to forget.
+      }
+
+      const {
+        classes: nextClasses,
+        examples: nextExamples,
+        removedExampleIds,
+      } = removeClassFrom(classes, examples, id);
+
+      setClasses(nextClasses);
+      setExamples(nextExamples);
+
+      await Promise.all([
+        db.saveClasses(nextClasses),
+        ...removedExampleIds.map((exampleId) => db.deleteExample(exampleId)),
+      ]);
+    },
+    [classes, examples],
+  );
 
   const pickRandomExample = useCallback((): Example | null => {
     if (examples.length === 0) return null;
@@ -265,6 +243,7 @@ export function useAiLab() {
     readyForChallenge,
     minExamplesPerClass: MIN_EXAMPLES_PER_CLASS,
     maxClasses: MAX_CLASSES,
+    minClasses: MIN_CLASSES,
     canAddClass,
     canDeleteClass,
     teach,

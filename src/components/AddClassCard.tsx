@@ -1,20 +1,20 @@
 import { useState } from 'react';
-import { EMOJI_PRESETS } from '../types';
 import { EmojiPicker } from './EmojiPicker';
 
 interface Props {
-  onAdd: (name: string, emoji: string) => void;
+  onAdd: (name: string, emoji: string | undefined) => void;
 }
 
 export function AddClassCard({ onAdd }: Props) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState(EMOJI_PRESETS[0]);
+  // No icon by default -- a preset emoji would be a wrong guess at the name.
+  const [emoji, setEmoji] = useState<string | undefined>(undefined);
 
   const reset = () => {
     setOpen(false);
     setName('');
-    setEmoji(EMOJI_PRESETS[0]);
+    setEmoji(undefined);
   };
 
   const submit = () => {
@@ -53,7 +53,7 @@ export function AddClassCard({ onAdd }: Props) {
         }}
       />
 
-      <p className="classEditorLabel">Emoji</p>
+      <p className="classEditorLabel">Icon</p>
       <EmojiPicker value={emoji} onChange={setEmoji} />
 
       <div className="addClassActions">

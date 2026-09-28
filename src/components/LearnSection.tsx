@@ -5,6 +5,7 @@ import * as ml from '../ml/classifier';
 import { toThumbnail } from '../ml/imageProcessing';
 import { DrawingCanvas, type DrawingCanvasHandle } from './DrawingCanvas';
 import { DatasetSummary } from './DatasetSummary';
+import { ClassLabel } from './ClassLabel';
 
 interface Props {
   lab: AiLab;
@@ -200,7 +201,7 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
                   <span className="pipelineMemoryCounts">
                     {lab.classes.map((def) => (
                       <span key={def.id} className="pipelineMemoryChip">
-                        {def.emoji}×{lab.counts[def.id] ?? 0}
+                        {def.emoji ?? def.name}×{lab.counts[def.id] ?? 0}
                       </span>
                     ))}
                   </span>
@@ -337,7 +338,7 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
                             {index === 0 ? 'Closest' : `#${index + 1} closest`}
                           </span>
                           <span className="neighborLabel">
-                            {def?.emoji} {def?.name}
+                            {def ? <ClassLabel def={def} /> : 'example'}
                           </span>
                         </div>
                       );
@@ -354,7 +355,7 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
                   <p className="compareGuess">
                     Based on the closest examples, the AI guesses:{' '}
                     <strong style={{ color: guessDef.accent }}>
-                      {guessDef.emoji} {guessDef.name}
+                      <ClassLabel def={guessDef} />
                     </strong>
                   </p>
                 ) : (
