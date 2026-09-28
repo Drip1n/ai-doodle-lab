@@ -4,14 +4,15 @@ interface Props {
   classes: ClassDef[];
   counts: Record<ClassId, number>;
   total: number;
+  title?: string;
 }
 
-export function DatasetSummary({ classes, counts, total }: Props) {
-  const max = Math.max(1, ...classes.map((c) => counts[c.id]));
+export function DatasetSummary({ classes, counts, total, title = 'Your dataset' }: Props) {
+  const max = Math.max(1, ...classes.map((c) => counts[c.id] ?? 0));
 
   return (
     <section className="panel">
-      <h3 className="panelTitle">Your dataset</h3>
+      <h3 className="panelTitle">{title}</h3>
       <ul className="datasetList">
         {classes.map((def) => (
           <li key={def.id} className="datasetRow">

@@ -1,4 +1,4 @@
-import type { ChallengeStats, ClassId, Example } from '../types';
+import type { ChallengeStats, Example, LearningClass } from '../types';
 
 /**
  * Tiny IndexedDB wrapper. Everything stays on this device -- there is no
@@ -72,6 +72,17 @@ export async function saveExample(example: Example): Promise<void> {
   await run(EXAMPLES, 'readwrite', (store) => store.put(example));
 }
 
+export async function deleteExample(id: string): Promise<void> {
+  await run(EXAMPLES, 'readwrite', (store) => store.delete(id));
+}
+
+export async function deleteExamplesForClass(classId: string): Promise<void> {
+  const rows = await loadExamples();
+  await Promise.all(
+    rows.filter((row) => row.classId === classId).map((row) => deleteExample(row.id)),
+  );
+}
+
 export async function clearExamples(): Promise<void> {
   await run(EXAMPLES, 'readwrite', (store) => store.clear());
 }
@@ -85,11 +96,14 @@ async function writeMeta<T>(key: string, value: T): Promise<void> {
   await run(META, 'readwrite', (store) => store.put({ key, value }));
 }
 
-export const loadClassNames = () => readMeta<Record<ClassId, string>>('classNames');
-export const saveClassNames = (names: Record<ClassId, string>) => writeMeta('classNames', names);
+export const loadClasses = () => readMeta<LearningClass[]>('classes');
+export const saveClasses = (classes: LearningClass[]) => writeMeta('classes', classes);
 
 export const loadStats = () => readMeta<ChallengeStats>('challengeStats');
 export const saveStats = (stats: ChallengeStats) => writeMeta('challengeStats', stats);
+
+export const loadMemoryStats = () => readMeta<ChallengeStats>('memoryStats');
+export const saveMemoryStats = (stats: ChallengeStats) => writeMeta('memoryStats', stats);
 
 export async function clearMeta(): Promise<void> {
   await run(META, 'readwrite', (store) => store.clear());

@@ -1,7 +1,7 @@
 import * as tf from '@tensorflow/tfjs';
 import * as mobilenetModule from '@tensorflow-models/mobilenet';
 import * as knnClassifier from '@tensorflow-models/knn-classifier';
-import { CLASS_IDS, type ClassId, type Prediction } from '../types';
+import type { ClassId, Example, Prediction } from '../types';
 import { toModelCanvas } from './imageProcessing';
 
 /**
@@ -74,7 +74,15 @@ export function addExample(embedding: Float32Array, classId: ClassId): void {
   }
 }
 
-export async function predict(embedding: Float32Array): Promise<Prediction> {
+/**
+ * Predicts a class for the embedding. `classIds` is the current, full set of
+ * categories the child has defined -- untrained ones simply score 0, since
+ * they have no examples to compare against.
+ */
+export async function predict(
+  embedding: Float32Array,
+  classIds: ClassId[],
+): Promise<Prediction> {
   if (knn.getNumClasses() === 0) {
     throw new Error('The AI has no examples yet.');
   }
@@ -82,13 +90,18 @@ export async function predict(embedding: Float32Array): Promise<Prediction> {
   try {
     const result = await knn.predictClass(tensor, 5);
     const confidences = {} as Record<ClassId, number>;
-    for (const id of CLASS_IDS) {
+    for (const id of classIds) {
       confidences[id] = result.confidences[id] ?? 0;
     }
-    return { classId: result.label as ClassId, confidences };
+    return { classId: result.label, confidences };
   } finally {
     tensor.dispose();
   }
+}
+
+/** Forgets every example taught under this class id. Used when a class is deleted. */
+export function removeClass(classId: ClassId): void {
+  knn.clearClass(classId);
 }
 
 export function resetClassifier(): void {
@@ -105,4 +118,32 @@ export function rebuildFrom(examples: { embedding: Float32Array; classId: ClassI
 
 export function trainedClassCount(): number {
   return knn.getNumClasses();
+}
+
+function squaredDistance(a: Float32Array, b: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    const diff = a[i] - b[i];
+    sum += diff * diff;
+  }
+  return sum;
+}
+
+/**
+ * Genuine nearest-neighbour lookup over the child's own stored examples --
+ * not fabricated, just plain distance between embeddings we already have.
+ * Used by the Learn page to show which real examples a new drawing is
+ * actually closest to.
+ */
+export function nearestExamples(
+  embedding: Float32Array,
+  examples: Example[],
+  k = 3,
+  excludeId?: string,
+): { example: Example; distance: number }[] {
+  return examples
+    .filter((example) => example.id !== excludeId)
+    .map((example) => ({ example, distance: squaredDistance(embedding, example.embedding) }))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, k);
 }

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useAiLab } from './hooks/useAiLab';
-import type { Stage } from './types';
+import type { ClassId, Stage } from './types';
 import { Stepper } from './components/Stepper';
-import { TeachStage } from './components/TeachStage';
+import { TeachStage, type FocusRequest } from './components/TeachStage';
 import { ChallengeMode } from './components/ChallengeMode';
 import { LearnSection } from './components/LearnSection';
 import { Loader } from './components/Loader';
@@ -12,6 +12,13 @@ export default function App() {
   const lab = useAiLab();
   const [stage, setStage] = useState<Stage>('teach');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
+
+  const goToTeach = (classId?: ClassId) => {
+    setStage('teach');
+    if (classId) setFocusRequest({ classId, token: Date.now() });
+  };
+  const goToChallenge = () => setStage('challenge');
 
   return (
     <div className="app">
@@ -36,9 +43,11 @@ export default function App() {
       <Stepper stage={stage} onChange={setStage} />
 
       <main className="appMain">
-        {stage === 'teach' && <TeachStage lab={lab} />}
-        {stage === 'challenge' && <ChallengeMode lab={lab} />}
-        {stage === 'learn' && <LearnSection />}
+        {stage === 'teach' && <TeachStage lab={lab} focusRequest={focusRequest} />}
+        {stage === 'challenge' && <ChallengeMode lab={lab} onGoToTeach={() => goToTeach()} />}
+        {stage === 'learn' && (
+          <LearnSection lab={lab} onGoToTeach={goToTeach} onGoToChallenge={goToChallenge} />
+        )}
       </main>
 
       <footer className="appFooter">
@@ -50,7 +59,7 @@ export default function App() {
       {confirmReset && (
         <ConfirmDialog
           title="Reset your AI?"
-          message="This deletes every example you taught and clears the challenge score. It cannot be undone."
+          message="This deletes every example, your custom categories, and both challenge scores, then picks a fresh set of starter categories. It cannot be undone."
           confirmLabel="Yes, reset everything"
           onConfirm={() => {
             void lab.reset();

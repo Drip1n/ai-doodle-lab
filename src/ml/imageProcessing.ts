@@ -68,27 +68,46 @@ export function isSupportedImage(file: File): boolean {
   return SUPPORTED_TYPES.includes(file.type);
 }
 
-/** Loads a picked file into an <img>, rejecting unsupported or broken files. */
+/**
+ * Loads a picked file into an <img>, rejecting unsupported or broken files.
+ *
+ * We read the file into a data: URL (not a blob object URL) so the same
+ * source string can be reused for the on-screen preview indefinitely --
+ * blob URLs must be revoked once, and revoking them immediately after
+ * decode (as this used to do) left any *new* <img> that pointed at the same
+ * URL broken, even though the original, already-decoded element was fine.
+ * The returned <img> is the exact element later fed into the ML pipeline,
+ * so what the child sees is what the model sees.
+ */
 export function loadImageFile(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     if (!isSupportedImage(file)) {
       reject(new Error('That file type is not supported. Try a JPG, PNG or WEBP.'));
       return;
     }
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      if (!img.naturalWidth || !img.naturalHeight) {
+    const reader = new FileReader();
+    reader.onerror = () => {
+      reject(new Error('That image could not be opened. Try a different one.'));
+    };
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      if (typeof dataUrl !== 'string') {
         reject(new Error('That image could not be opened. Try a different one.'));
         return;
       }
-      resolve(img);
+      const img = new Image();
+      img.onload = () => {
+        if (!img.naturalWidth || !img.naturalHeight) {
+          reject(new Error('That image could not be opened. Try a different one.'));
+          return;
+        }
+        resolve(img);
+      };
+      img.onerror = () => {
+        reject(new Error('That image could not be opened. Try a different one.'));
+      };
+      img.src = dataUrl;
     };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('That image could not be opened. Try a different one.'));
-    };
-    img.src = url;
+    reader.readAsDataURL(file);
   });
 }

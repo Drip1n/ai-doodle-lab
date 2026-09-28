@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  CLASS_IDS,
-  DEFAULT_CLASSES,
+  COLOR_PALETTE,
+  MAX_CLASSES,
+  MIN_CLASSES,
+  STARTER_POOL,
   type ChallengeStats,
-  type ClassDef,
   type ClassId,
   type Example,
   type ExampleSource,
+  type LearningClass,
   type ModelStatus,
   type Prediction,
 } from '../types';
@@ -15,9 +17,37 @@ import { toThumbnail } from '../ml/imageProcessing';
 import * as db from '../storage/db';
 
 const MIN_EXAMPLES_PER_CLASS = 2;
+const EMPTY_STATS: ChallengeStats = { attempts: 0, correct: 0 };
 
 function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+/** Three random, unique starter categories -- re-rolled only on first run or reset. */
+function pickStarterClasses(): LearningClass[] {
+  return shuffle(STARTER_POOL)
+    .slice(0, 3)
+    .map((pick, index) => ({
+      id: pick.id,
+      name: pick.name,
+      emoji: pick.emoji,
+      accent: COLOR_PALETTE[index % COLOR_PALETTE.length].accent,
+      accentSoft: COLOR_PALETTE[index % COLOR_PALETTE.length].accentSoft,
+    }));
+}
+
+function nextColor(existing: LearningClass[]): { accent: string; accentSoft: string } {
+  const used = new Set(existing.map((def) => def.accent));
+  return COLOR_PALETTE.find((color) => !used.has(color.accent)) ?? COLOR_PALETTE[existing.length % COLOR_PALETTE.length];
 }
 
 export interface TeachResult {
@@ -29,32 +59,37 @@ export function useAiLab() {
     state: 'loading',
     message: 'Getting your AI ready…',
   });
+  const [classes, setClasses] = useState<LearningClass[]>([]);
   const [examples, setExamples] = useState<Example[]>([]);
-  const [names, setNames] = useState<Record<ClassId, string>>({
-    cat: DEFAULT_CLASSES.cat.name,
-    house: DEFAULT_CLASSES.house.name,
-    tree: DEFAULT_CLASSES.tree.name,
-  });
-  const [stats, setStats] = useState<ChallengeStats>({ attempts: 0, correct: 0 });
+  const [stats, setStats] = useState<ChallengeStats>(EMPTY_STATS);
+  const [memoryStats, setMemoryStats] = useState<ChallengeStats>(EMPTY_STATS);
 
   const boot = useCallback(async () => {
     setModelStatus({ state: 'loading', message: 'Getting your AI ready…' });
     try {
       await ml.loadModel((message) => setModelStatus({ state: 'loading', message }));
 
-      const [stored, storedNames, storedStats] = await Promise.all([
+      const [storedExamples, storedClasses, storedStats, storedMemoryStats] = await Promise.all([
         db.loadExamples(),
-        db.loadClassNames(),
+        db.loadClasses(),
         db.loadStats(),
+        db.loadMemoryStats(),
       ]);
 
-      if (stored.length) {
-        // Replay the saved embeddings so the AI remembers last session.
-        ml.rebuildFrom(stored);
-        setExamples(stored);
+      let activeClasses = storedClasses;
+      if (!activeClasses || activeClasses.length === 0) {
+        activeClasses = pickStarterClasses();
+        void db.saveClasses(activeClasses);
       }
-      if (storedNames) setNames((current) => ({ ...current, ...storedNames }));
+      setClasses(activeClasses);
+
+      if (storedExamples.length) {
+        // Replay the saved embeddings so the AI remembers last session.
+        ml.rebuildFrom(storedExamples);
+        setExamples(storedExamples);
+      }
       if (storedStats) setStats(storedStats);
+      if (storedMemoryStats) setMemoryStats(storedMemoryStats);
 
       setModelStatus({ state: 'ready' });
     } catch (error) {
@@ -72,20 +107,26 @@ export function useAiLab() {
     void boot();
   }, [boot]);
 
-  const classes = useMemo<ClassDef[]>(
-    () => CLASS_IDS.map((id) => ({ ...DEFAULT_CLASSES[id], name: names[id] })),
-    [names],
-  );
-
   const counts = useMemo(() => {
-    const result = { cat: 0, house: 0, tree: 0 } as Record<ClassId, number>;
-    for (const example of examples) result[example.classId] += 1;
+    const result: Record<ClassId, number> = {};
+    for (const def of classes) result[def.id] = 0;
+    for (const example of examples) {
+      result[example.classId] = (result[example.classId] ?? 0) + 1;
+    }
     return result;
-  }, [examples]);
+  }, [classes, examples]);
 
   const total = examples.length;
 
-  const readyForChallenge = CLASS_IDS.every((id) => counts[id] >= MIN_EXAMPLES_PER_CLASS);
+  const trainedClasses = useMemo(
+    () => classes.filter((def) => (counts[def.id] ?? 0) >= MIN_EXAMPLES_PER_CLASS),
+    [classes, counts],
+  );
+
+  // Two well-trained categories are enough for a meaningful guessing game.
+  const readyForChallenge = trainedClasses.length >= 2;
+  const canAddClass = classes.length < MAX_CLASSES;
+  const canDeleteClass = classes.length > MIN_CLASSES;
 
   const teach = useCallback(
     async (
@@ -116,10 +157,13 @@ export function useAiLab() {
       source: HTMLCanvasElement | HTMLImageElement,
     ): Promise<{ prediction: Prediction; embedding: Float32Array }> => {
       const embedding = await ml.embedToArray(source);
-      const prediction = await ml.predict(embedding);
+      const prediction = await ml.predict(
+        embedding,
+        classes.map((def) => def.id),
+      );
       return { prediction, embedding };
     },
-    [],
+    [classes],
   );
 
   const recordChallenge = useCallback((wasCorrect: boolean) => {
@@ -133,24 +177,79 @@ export function useAiLab() {
     });
   }, []);
 
-  const renameClass = useCallback((id: ClassId, name: string) => {
-    setNames((current) => {
-      const next = { ...current, [id]: name.trim() || DEFAULT_CLASSES[id].name };
-      void db.saveClassNames(next);
+  const recordMemoryChallenge = useCallback((wasCorrect: boolean) => {
+    setMemoryStats((current) => {
+      const next = {
+        attempts: current.attempts + 1,
+        correct: current.correct + (wasCorrect ? 1 : 0),
+      };
+      void db.saveMemoryStats(next);
       return next;
     });
   }, []);
 
+  const renameClass = useCallback((id: ClassId, name: string) => {
+    setClasses((current) => {
+      const next = current.map((def) => (def.id === id ? { ...def, name: name.trim() || def.name } : def));
+      void db.saveClasses(next);
+      return next;
+    });
+  }, []);
+
+  const changeEmoji = useCallback((id: ClassId, emoji: string) => {
+    setClasses((current) => {
+      const next = current.map((def) => (def.id === id ? { ...def, emoji } : def));
+      void db.saveClasses(next);
+      return next;
+    });
+  }, []);
+
+  const addClass = useCallback(
+    (name: string, emoji: string): ClassId | null => {
+      if (classes.length >= MAX_CLASSES) return null;
+      const color = nextColor(classes);
+      const created: LearningClass = {
+        id: newId(),
+        name: name.trim() || 'New',
+        emoji: emoji || '❓',
+        accent: color.accent,
+        accentSoft: color.accentSoft,
+      };
+      setClasses((current) => {
+        const next = [...current, created];
+        void db.saveClasses(next);
+        return next;
+      });
+      return created.id;
+    },
+    [classes],
+  );
+
+  const deleteClass = useCallback(async (id: ClassId) => {
+    ml.removeClass(id);
+    setClasses((current) => {
+      const next = current.filter((def) => def.id !== id);
+      void db.saveClasses(next);
+      return next;
+    });
+    setExamples((current) => current.filter((example) => example.classId !== id));
+    await db.deleteExamplesForClass(id);
+  }, []);
+
+  const pickRandomExample = useCallback((): Example | null => {
+    if (examples.length === 0) return null;
+    return examples[Math.floor(Math.random() * examples.length)];
+  }, [examples]);
+
   const reset = useCallback(async () => {
     ml.resetClassifier();
+    const starter = pickStarterClasses();
+    setClasses(starter);
     setExamples([]);
-    setStats({ attempts: 0, correct: 0 });
-    setNames({
-      cat: DEFAULT_CLASSES.cat.name,
-      house: DEFAULT_CLASSES.house.name,
-      tree: DEFAULT_CLASSES.tree.name,
-    });
+    setStats(EMPTY_STATS);
+    setMemoryStats(EMPTY_STATS);
     await Promise.all([db.clearExamples(), db.clearMeta()]);
+    await db.saveClasses(starter);
   }, []);
 
   return {
@@ -161,12 +260,22 @@ export function useAiLab() {
     counts,
     total,
     stats,
+    memoryStats,
+    trainedClasses,
     readyForChallenge,
     minExamplesPerClass: MIN_EXAMPLES_PER_CLASS,
+    maxClasses: MAX_CLASSES,
+    canAddClass,
+    canDeleteClass,
     teach,
     classify,
     recordChallenge,
+    recordMemoryChallenge,
     renameClass,
+    changeEmoji,
+    addClass,
+    deleteClass,
+    pickRandomExample,
     reset,
   };
 }
