@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   MAX_CLASSES,
   MIN_CLASSES,
+  type AiDrawStats,
   type ChallengeStats,
   type ClassId,
   type Example,
@@ -15,6 +16,7 @@ import {
   createClass,
   newId,
   pickStarterClasses,
+  recordAiDrawRound,
   recordStat,
   removeClassFrom,
   renameClassIn,
@@ -27,6 +29,7 @@ import * as db from '../storage/db';
 
 const MIN_EXAMPLES_PER_CLASS = 2;
 const EMPTY_STATS: ChallengeStats = { attempts: 0, correct: 0 };
+const EMPTY_AI_DRAW_STATS: AiDrawStats = { rounds: 0, correct: 0, revealPercentSum: 0 };
 
 export interface TeachResult {
   example: Example;
@@ -41,18 +44,21 @@ export function useAiLab() {
   const [examples, setExamples] = useState<Example[]>([]);
   const [stats, setStats] = useState<ChallengeStats>(EMPTY_STATS);
   const [memoryStats, setMemoryStats] = useState<ChallengeStats>(EMPTY_STATS);
+  const [aiDrawStats, setAiDrawStats] = useState<AiDrawStats>(EMPTY_AI_DRAW_STATS);
 
   const boot = useCallback(async () => {
     setModelStatus({ state: 'loading', message: 'Getting your AI ready…' });
     try {
       await ml.loadModel((message) => setModelStatus({ state: 'loading', message }));
 
-      const [storedExamples, storedClasses, storedStats, storedMemoryStats] = await Promise.all([
-        db.loadExamples(),
-        db.loadClasses(),
-        db.loadStats(),
-        db.loadMemoryStats(),
-      ]);
+      const [storedExamples, storedClasses, storedStats, storedMemoryStats, storedAiDrawStats] =
+        await Promise.all([
+          db.loadExamples(),
+          db.loadClasses(),
+          db.loadStats(),
+          db.loadMemoryStats(),
+          db.loadAiDrawStats(),
+        ]);
 
       let activeClasses = storedClasses;
       if (!activeClasses || activeClasses.length === 0) {
@@ -72,6 +78,7 @@ export function useAiLab() {
 
       if (storedStats) setStats(storedStats);
       if (storedMemoryStats) setMemoryStats(storedMemoryStats);
+      if (storedAiDrawStats) setAiDrawStats(storedAiDrawStats);
 
       setModelStatus({ state: 'ready' });
     } catch (error) {
@@ -157,6 +164,14 @@ export function useAiLab() {
     });
   }, []);
 
+  const recordAiDrawChallenge = useCallback((wasCorrect: boolean, revealPercent: number) => {
+    setAiDrawStats((current) => {
+      const next = recordAiDrawRound(current, wasCorrect, revealPercent);
+      void db.saveAiDrawStats(next);
+      return next;
+    });
+  }, []);
+
   const renameClass = useCallback((id: ClassId, name: string) => {
     setClasses((current) => {
       const next = renameClassIn(current, id, name);
@@ -226,6 +241,7 @@ export function useAiLab() {
     setExamples([]);
     setStats(EMPTY_STATS);
     setMemoryStats(EMPTY_STATS);
+    setAiDrawStats(EMPTY_AI_DRAW_STATS);
     await Promise.all([db.clearExamples(), db.clearMeta()]);
     await db.saveClasses(starter);
   }, []);
@@ -239,6 +255,7 @@ export function useAiLab() {
     total,
     stats,
     memoryStats,
+    aiDrawStats,
     trainedClasses,
     readyForChallenge,
     minExamplesPerClass: MIN_EXAMPLES_PER_CLASS,
@@ -250,6 +267,7 @@ export function useAiLab() {
     classify,
     recordChallenge,
     recordMemoryChallenge,
+    recordAiDrawChallenge,
     renameClass,
     changeEmoji,
     addClass,

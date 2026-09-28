@@ -2,6 +2,7 @@ import {
   COLOR_PALETTE,
   MAX_CLASSES,
   STARTER_POOL,
+  type AiDrawStats,
   type ChallengeStats,
   type ClassId,
   type Example,
@@ -142,6 +143,23 @@ export function recordStat(stats: ChallengeStats, wasCorrect: boolean): Challeng
   return {
     attempts: stats.attempts + 1,
     correct: stats.correct + (wasCorrect ? 1 : 0),
+  };
+}
+
+/**
+ * A finished AI Draws round. `revealPercent` is how much of the drawing had
+ * appeared when the child guessed -- a progress measurement, never a
+ * confidence score -- and is only banked when the guess was right.
+ */
+export function recordAiDrawRound(
+  stats: AiDrawStats,
+  wasCorrect: boolean,
+  revealPercent: number,
+): AiDrawStats {
+  return {
+    rounds: stats.rounds + 1,
+    correct: stats.correct + (wasCorrect ? 1 : 0),
+    revealPercentSum: stats.revealPercentSum + (wasCorrect ? revealPercent : 0),
   };
 }
 

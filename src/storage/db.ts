@@ -1,4 +1,4 @@
-import type { ChallengeStats, Example, LearningClass } from '../types';
+import type { AiDrawStats, ChallengeStats, Example, LearningClass } from '../types';
 
 /**
  * Tiny IndexedDB wrapper. Everything stays on this device -- there is no
@@ -133,6 +133,9 @@ export const saveStats = (stats: ChallengeStats) => writeMeta('challengeStats', 
 
 export const loadMemoryStats = () => readMeta<ChallengeStats>('memoryStats');
 export const saveMemoryStats = (stats: ChallengeStats) => writeMeta('memoryStats', stats);
+
+export const loadAiDrawStats = () => readMeta<AiDrawStats>('aiDrawStats');
+export const saveAiDrawStats = (stats: AiDrawStats) => writeMeta('aiDrawStats', stats);
 
 export async function clearMeta(): Promise<void> {
   await run(META, 'readwrite', (store) => store.clear());

@@ -367,7 +367,88 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
         )}
       </section>
 
-      {/* D. mini experiments */}
+      {/* D. classifier vs generator */}
+      <section className="panel">
+        <h3 className="panelTitle">Two kinds of AI</h3>
+        <p className="hintLine">
+          Everything above is a <strong>classifier</strong>. The AI Draws challenge uses a
+          completely different kind of model — a <strong>generator</strong>.
+        </p>
+
+        <div className="twoAiGrid">
+          <div className="twoAiColumn">
+            <p className="twoAiHead">CLASSIFIER</p>
+            <div className="twoAiStep">
+              <span className="twoAiEmoji" aria-hidden="true">
+                ✏️
+              </span>
+              <span>your drawing</span>
+            </div>
+            <span className="twoAiArrow" aria-hidden="true">
+              ↓
+            </span>
+            <div className="twoAiStep">
+              <span className="twoAiEmoji" aria-hidden="true">
+                🤖
+              </span>
+              <span>&ldquo;What is this?&rdquo;</span>
+            </div>
+            <span className="twoAiArrow" aria-hidden="true">
+              ↓
+            </span>
+            <div className="twoAiStep twoAiResult">
+              <span className="twoAiEmoji" aria-hidden="true">
+                🐱
+              </span>
+              <span>CAT</span>
+            </div>
+            <p className="twoAiCaption">Recognizes.</p>
+          </div>
+
+          <div className="twoAiColumn">
+            <p className="twoAiHead">GENERATOR</p>
+            <div className="twoAiStep">
+              <span className="twoAiEmoji" aria-hidden="true">
+                💭
+              </span>
+              <span>&ldquo;Draw a cat&rdquo;</span>
+            </div>
+            <span className="twoAiArrow" aria-hidden="true">
+              ↓
+            </span>
+            <div className="twoAiStep">
+              <span className="twoAiEmoji" aria-hidden="true">
+                🤖
+              </span>
+              <span>creates strokes</span>
+            </div>
+            <span className="twoAiArrow" aria-hidden="true">
+              ↓
+            </span>
+            <div className="twoAiStep twoAiResult">
+              <span className="twoAiEmoji" aria-hidden="true">
+                ✏️
+              </span>
+              <span>new cat drawing</span>
+            </div>
+            <p className="twoAiCaption">Creates.</p>
+          </div>
+        </div>
+
+        <p className="twoAiPunchline">
+          The classifier recognizes. The generator creates.
+        </p>
+        <p className="hintLine">
+          Both learned patterns from examples, but they solve different problems. The generator in
+          AI Draws was trained beforehand on a large collection of human sketches — it has never
+          seen anything you taught your own AI.
+        </p>
+        <button type="button" className="btn btnPrimary" onClick={onGoToChallenge}>
+          🤖 Try AI Draws
+        </button>
+      </section>
+
+      {/* E. mini experiments */}
       <section className="panel">
         <h3 className="panelTitle">Mini experiments</h3>
         <div className="experimentGrid">

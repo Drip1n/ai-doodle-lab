@@ -3,6 +3,7 @@ import {
   countExamples,
   createClass,
   pickStarterClasses,
+  recordAiDrawRound,
   recordStat,
   removeClassFrom,
   renameClassIn,
@@ -195,5 +196,24 @@ describe('selection recovery', () => {
 
   it('reports nothing selectable when there are no categories', () => {
     expect(resolveSelection([], 'cat')).toBeNull();
+  });
+});
+
+describe('recordAiDrawRound', () => {
+  const empty = { rounds: 0, correct: 0, revealPercentSum: 0 };
+
+  it('banks the reveal percentage only when the guess was right', () => {
+    const won = recordAiDrawRound(empty, true, 37);
+    expect(won).toEqual({ rounds: 1, correct: 1, revealPercentSum: 37 });
+
+    const lost = recordAiDrawRound(won, false, 100);
+    expect(lost).toEqual({ rounds: 2, correct: 1, revealPercentSum: 37 });
+  });
+
+  it('averages only over the rounds that were guessed correctly', () => {
+    let stats = recordAiDrawRound(empty, true, 40);
+    stats = recordAiDrawRound(stats, false, 0);
+    stats = recordAiDrawRound(stats, true, 60);
+    expect(Math.round(stats.revealPercentSum / stats.correct)).toBe(50);
   });
 });

@@ -721,7 +721,7 @@
 
 .challengeSwitch {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
@@ -1439,11 +1439,188 @@
   margin-top: 6px;
 }
 
+/* ---------- two kinds of AI ---------- */
+
+.twoAiGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.twoAiColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-tint);
+  border-radius: var(--radius);
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.twoAiHead {
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.twoAiStep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  width: 100%;
+  font-weight: 700;
+  font-size: 0.9rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.twoAiEmoji {
+  font-size: 1.6rem;
+}
+
+.twoAiResult {
+  font-weight: 900;
+  color: var(--brand);
+}
+
+.twoAiArrow {
+  color: var(--ink-soft);
+  font-weight: 900;
+}
+
+.twoAiCaption {
+  margin-top: 4px;
+  font-weight: 900;
+}
+
+.twoAiPunchline {
+  text-align: center;
+  font-weight: 900;
+  font-size: 1.05rem;
+}
+
+/* ---------- AI draws ---------- */
+
+.aiDrawIntro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  padding: 40px 16px;
+}
+
+.aiDrawIntroEmoji {
+  font-size: 3rem;
+}
+
+.aiSketchCanvas {
+  cursor: default;
+}
+
+.aiDrawControls {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.aiDrawControls .btnGhost.isActive {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.guessGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.guessOption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px 12px;
+  font-size: 1.15rem;
+  font-weight: 900;
+  background: var(--surface);
+  border: 3px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  min-height: 72px;
+}
+
+.guessOption:not(:disabled):hover {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.guessEmoji {
+  font-size: 1.7rem;
+}
+
+.guessOption.isWrong {
+  border-color: var(--line);
+  background: var(--bg-tint);
+  color: var(--ink-soft);
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.guessOption.isAnswer {
+  border-color: var(--success);
+  background: #e3f7ec;
+  color: var(--ink);
+  opacity: 1;
+  text-decoration: none;
+}
+
+.aiDrawNudge {
+  text-align: center;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.aiDrawReveal {
+  font-weight: 700;
+}
+
+.aiDrawExplainHead {
+  margin: 4px 0 0;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
 /* ---------- responsive ---------- */
 
 @media (max-width: 900px) {
   .workGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  /* Three tabs no longer fit side by side: scroll them instead of squashing
+     the labels into unreadable columns. */
+  .challengeSwitch {
+    display: flex;
+    grid-template-columns: none;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .challengeSwitchBtn {
+    flex: 0 0 72%;
+    scroll-snap-align: start;
   }
 }
 

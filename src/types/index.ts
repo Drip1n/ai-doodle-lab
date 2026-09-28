@@ -80,9 +80,21 @@ export interface ChallengeStats {
   correct: number;
 }
 
+/**
+ * AI Draws is scored separately from the classifier and memory challenges:
+ * it measures the child against a pretrained generator, not their own AI.
+ * `revealPercentSum` only accumulates rounds that were guessed correctly --
+ * an unsolved round has no meaningful "guessed after N%" to record.
+ */
+export interface AiDrawStats {
+  rounds: number;
+  correct: number;
+  revealPercentSum: number;
+}
+
 export type Stage = 'teach' | 'challenge' | 'learn';
 
-export type ChallengeKind = 'draw' | 'memory';
+export type ChallengeKind = 'draw' | 'aidraw' | 'memory';
 
 export type ModelStatus =
   | { state: 'loading'; message: string }

@@ -47,12 +47,18 @@ The app has three stages:
 Give the AI examples of cats, houses, and trees by drawing (or uploading) pictures and labeling them.
 
 ### 2. Challenge
-Draw something new, unlabeled, and let the AI guess what it is — with real confidence scores. Got it
-wrong? Turn that drawing into a new training example on the spot.
+Three modes:
+
+- **✏️ You draw** — draw something new, unlabeled, and let the AI guess what it is, with real
+  confidence scores. Got it wrong? Turn that drawing into a new training example on the spot.
+- **🤖 AI draws** — a pretrained **sketch-generation** model invents a brand new drawing and
+  animates it stroke by stroke. Guess what it is before it finishes. This is the counterpart to
+  You Draw: *generating* instead of *recognizing*.
+- **🧠 Memory** — can you remember what the AI learned?
 
 ### 3. Learn
-Friendly explainer cards cover *why* examples, dataset balance, and variation matter, plus a few
-experiments to try live.
+Friendly explainer cards cover *why* examples, dataset balance, and variation matter, a side-by-side
+"two kinds of AI" comparison of the classifier and the generator, plus a few experiments to try live.
 
 > The app uses **MobileNet** as a pretrained visual feature extractor and a **KNN classifier** for
 > the workshop-specific categories. We are **not** training a complete neural network from scratch —
@@ -90,6 +96,9 @@ An internet connection is needed the first time the app loads, to download the M
 (~17 MB) from Google's model host. The browser caches them after that, so subsequent loads work
 offline.
 
+**AI Draws** likewise needs internet the first time it uses a given drawing category, to fetch that
+category's ~3 MB Sketch-RNN model. Once loaded, generation itself is entirely local.
+
 ## 🧠 Machine learning
 
 - **TensorFlow.js** runs the model entirely client-side.
@@ -100,16 +109,38 @@ offline.
 - Training examples and predictions never leave the browser.
 
 ```text
-Drawing
-   ↓
-MobileNet
-   ↓
-Visual features
+Classifier path (You Draw)        Generator path (AI Draws)
+
+Drawing                           Sketch-RNN decoder
+   ↓                                 ↓
+MobileNet                         stroke sequence
+   ↓                                 ↓
+Visual features                   animated canvas
    ↓
 KNN classifier
    ↓
 Cat / House / Tree
 ```
+
+### AI Draws (sketch generation)
+
+AI Draws uses Google Magenta's pretrained **Sketch-RNN** checkpoints — one small (~3 MB) model per
+category, trained on the **Quick, Draw!** dataset. Each round samples a *new* stroke sequence from
+the model; nothing is replayed from the dataset and nothing is selected from a library of images.
+
+- Models are downloaded **lazily**, one category at a time, and cached in memory for the session
+  (the browser's HTTP cache covers repeat visits). Nothing is bundled into the app.
+- `src/generative/` contains a minimal decoder-only Sketch-RNN runtime (~250 lines) built on the
+  TensorFlow.js already in the app. The `@magenta/sketch` package pins TensorFlow.js 1.x, which
+  would pull a second, much older copy of TF into the bundle, so only the parts actually needed to
+  load and sample the published `.gen.json` checkpoints are reimplemented.
+- Generation runs entirely in the browser — no backend, no API key. Sampling a whole sketch takes
+  roughly **200–400 ms** on a laptop CPU.
+- The generator is completely separate from the classifier. It has never seen anything a student
+  taught their own AI, and the app says so in the UI.
+- 24 categories are shipped, each verified to download and generate: cat, dog, rabbit, pig, sheep,
+  owl, penguin, duck, bee, spider, snail, mosquito, whale, octopus, crab, lobster, bus, truck,
+  helicopter, bicycle, flower, cactus, palm tree, pineapple.
 
 ## 🔒 Privacy
 
@@ -117,6 +148,8 @@ Cat / House / Tree
 - No analytics
 - No tracking
 - Drawings are processed locally in the browser
+- AI Draws downloads pretrained model weights, but sends nothing: no drawing, guess or score ever
+  leaves the device
 - Images are not uploaded to any server — everything (examples, predictions, dataset) is stored
   on-device via IndexedDB
 
@@ -146,13 +179,15 @@ Facilitator notes:
 - TensorFlow.js
 - MobileNet (`@tensorflow-models/mobilenet`)
 - KNN Classifier (`@tensorflow-models/knn-classifier`)
+- Sketch-RNN (pretrained Magenta checkpoints, loaded directly)
 
 ## 📁 Project structure
 
 ```text
 src/
-  components/    UI: canvas, class cards, memory wall, challenge, learn cards, loader
+  components/    UI: canvas, class cards, memory wall, challenges, learn cards, loader
   ml/            classifier.ts (MobileNet + KNN), imageProcessing.ts (shared 224x224 pipeline)
+  generative/    sketchGenerator.ts (Sketch-RNN runtime), supportedModels.ts, strokeUtils.ts
   hooks/         useAiLab.ts — all app state and actions
   storage/       db.ts — IndexedDB persistence
   styles/        base.css (tokens + primitives), app.css (components)
@@ -163,12 +198,20 @@ src/
 
 These are possibilities, not existing features:
 
-- custom categories
 - webcam training
 - team competitions
 - save/export trained datasets
 - teacher dashboard
 - additional workshop modes
+
+## 🙏 Credits
+
+- **Sketch-RNN** models and format by the [Magenta](https://github.com/magenta/magenta-js) team at
+  Google, described in [*A Neural Representation of Sketch Drawings*](https://arxiv.org/abs/1704.03477)
+  (Ha & Eck, 2017). The checkpoints are served from Google's public `quickdraw-models` bucket.
+- The models were trained on the [**Quick, Draw!** dataset](https://github.com/googlecreativelab/quickdraw-dataset)
+  by Google Creative Lab, licensed **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)**.
+- **MobileNet** weights by Google, via `@tensorflow-models/mobilenet`.
 
 ## 📄 License
 
