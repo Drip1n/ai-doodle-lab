@@ -11,6 +11,7 @@
 
 AI Doodle Lab is a kid-friendly, browser-based machine learning workshop where students teach an
 AI to recognize their own drawings — and immediately test what it has learned.
+🌐 Live Demo: https://fontys-ai-lab.milansmiesko.nl
 
 <p align="center">
   <img src="public/fontys-ict.png" width="72" alt="Fontys ICT" />
