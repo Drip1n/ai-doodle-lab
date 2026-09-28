@@ -18,11 +18,6 @@ const MODEL_HOST = 'https://storage.googleapis.com/quickdraw-models/sketchRNN/mo
  * Rabbit / Pig" is a real guess; "Cat / Helicopter / Cactus / Crab" is not.
  * Each group therefore needs at least four members.
  */
-/**
- * Groups exist purely so a round's wrong answers are plausible. "Cat / Dog /
- * Rabbit / Pig" is a real guess; "Cat / Helicopter / Cactus / Crab" is not.
- * Each group therefore needs at least four members.
- */
 export type SketchGroup = 'animals' | 'bugs' | 'sea' | 'vehicles' | 'plants';
 
 export interface SketchModelDef {

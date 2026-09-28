@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useAiLab } from './hooks/useAiLab';
-import type { ClassId, Stage } from './types';
+import type { ChallengeKind, ClassId, Stage } from './types';
 import { Stepper } from './components/Stepper';
 import { TeachStage, type FocusRequest } from './components/TeachStage';
-import { ChallengeMode } from './components/ChallengeMode';
+import { ChallengeMode, type ModeRequest } from './components/ChallengeMode';
 import { LearnSection } from './components/LearnSection';
 import { Loader } from './components/Loader';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -13,12 +13,21 @@ export default function App() {
   const [stage, setStage] = useState<Stage>('teach');
   const [confirmReset, setConfirmReset] = useState(false);
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
+  const [modeRequest, setModeRequest] = useState<ModeRequest | null>(null);
 
   const goToTeach = (classId?: ClassId) => {
     setStage('teach');
     if (classId) setFocusRequest({ classId, token: Date.now() });
   };
-  const goToChallenge = () => setStage('challenge');
+
+  /**
+   * Callers that care which challenge they land on say so; everyone else
+   * still gets You Draw, which is where the workshop starts.
+   */
+  const goToChallenge = (kind?: ChallengeKind) => {
+    setStage('challenge');
+    if (kind) setModeRequest({ kind, token: Date.now() });
+  };
 
   return (
     <div className="app">
@@ -31,6 +40,9 @@ export default function App() {
             <span className="brandTitle">AI Doodle Lab</span>
             <span className="brandSub">Draw it. Teach it. Test it.</span>
           </span>
+          <span className="brandPartner">
+            <img src="/fontys-ict.png" alt="Fontys ICT" className="brandPartnerMark" />
+          </span>
         </div>
         <div className="headerRight">
           <span className="privacyPill">🔒 Runs on your device</span>
@@ -42,16 +54,29 @@ export default function App() {
 
       <Stepper stage={stage} onChange={setStage} />
 
+      {!lab.storageAvailable && (
+        <p className="storageWarning" role="status">
+          ⚠️ This browser is not saving your work. Everything still works, but the examples
+          disappear when you close the tab.
+        </p>
+      )}
+
       <main className="appMain">
         {stage === 'teach' && <TeachStage lab={lab} focusRequest={focusRequest} />}
-        {stage === 'challenge' && <ChallengeMode lab={lab} onGoToTeach={() => goToTeach()} />}
+        {stage === 'challenge' && (
+          <ChallengeMode lab={lab} modeRequest={modeRequest} onGoToTeach={() => goToTeach()} />
+        )}
         {stage === 'learn' && (
           <LearnSection lab={lab} onGoToTeach={goToTeach} onGoToChallenge={goToChallenge} />
         )}
       </main>
 
       <footer className="appFooter">
-        🔒 Your drawings stay on this device. No accounts, no uploads, no tracking.
+        <p>
+          🔒 Your drawings stay on this device. No accounts, nothing sent to our server, no
+          tracking.
+        </p>
+        <p className="appFooterPartner">Built for a Fontys ICT workshop</p>
       </footer>
 
       <Loader status={lab.modelStatus} onRetry={lab.retryLoad} />

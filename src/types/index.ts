@@ -1,3 +1,5 @@
+import type { LoadProgress } from '../ml/loadStages';
+
 /**
  * Classes are data-driven so a workshop can teach any set of categories.
  * `id` is generated once and never changes — renaming or re-emoji-ing a
@@ -97,6 +99,10 @@ export type Stage = 'teach' | 'challenge' | 'learn';
 export type ChallengeKind = 'draw' | 'aidraw' | 'memory';
 
 export type ModelStatus =
-  | { state: 'loading'; message: string }
+  | { state: 'loading'; progress: LoadProgress }
   | { state: 'ready' }
-  | { state: 'error'; message: string };
+  /**
+   * No message: a failed download has nothing useful to say to a child, and
+   * the raw exception text is never something we want on screen.
+   */
+  | { state: 'error' };

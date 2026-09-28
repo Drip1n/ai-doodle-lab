@@ -11,8 +11,10 @@ const MAX_THUMBNAILS = 8;
 
 export function MemoryWall({ classes, counts, examples }: Props) {
   const total = examples.length;
-  const max = Math.max(...classes.map((c) => counts[c.id]));
-  const laggingClass = total > 0 ? classes.find((c) => counts[c.id] * 2 < max) : undefined;
+  // `counts` can lag a class list that just changed, so never index blindly.
+  const countFor = (id: ClassId) => counts[id] ?? 0;
+  const max = Math.max(0, ...classes.map((c) => countFor(c.id)));
+  const laggingClass = total > 0 ? classes.find((c) => countFor(c.id) * 2 < max) : undefined;
 
   return (
     <section className="panel">
@@ -31,7 +33,7 @@ export function MemoryWall({ classes, counts, examples }: Props) {
             <p className="memoryHeading">
               <ClassLabel def={def} />
               <span className="memoryCount" style={{ background: def.accentSoft, color: def.accent }}>
-                {counts[def.id]} {counts[def.id] === 1 ? 'example' : 'examples'}
+                {countFor(def.id)} {countFor(def.id) === 1 ? 'example' : 'examples'}
               </span>
             </p>
             {own.length === 0 ? (

@@ -24,12 +24,12 @@ export function DatasetSummary({ classes, counts, total, title = 'Your dataset' 
               <span
                 className="datasetBarFill"
                 style={{
-                  width: `${(counts[def.id] / max) * 100}%`,
+                  width: `${((counts[def.id] ?? 0) / max) * 100}%`,
                   background: def.accent,
                 }}
               />
             </span>
-            <span className="datasetValue">{counts[def.id]}</span>
+            <span className="datasetValue">{counts[def.id] ?? 0}</span>
           </li>
         ))}
       </ul>

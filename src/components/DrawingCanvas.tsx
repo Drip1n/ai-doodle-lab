@@ -153,6 +153,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(function Dra
           width={RESOLUTION}
           height={RESOLUTION}
           className="canvas"
+          role="img"
+          aria-label={
+            dirty ? 'Drawing area, contains your drawing' : 'Drawing area, currently empty'
+          }
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -175,6 +179,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(function Dra
               className={`brushButton${brush === option.value ? ' isActive' : ''}`}
               onClick={() => setBrush(option.value)}
               aria-pressed={brush === option.value}
+              aria-label={`${option.label} brush`}
               title={`${option.label} brush`}
             >
               <span className="brushDot" style={{ width: option.value, height: option.value }} />

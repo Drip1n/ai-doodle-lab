@@ -2,7 +2,8 @@ import * as tf from '@tensorflow/tfjs';
 import * as mobilenetModule from '@tensorflow-models/mobilenet';
 import * as knnClassifier from '@tensorflow-models/knn-classifier';
 import type { ClassId, Example, Prediction } from '../types';
-import { toModelCanvas } from './imageProcessing';
+import { MODEL_INPUT_SIZE, toModelCanvas } from './imageProcessing';
+import type { LoadStageId } from './loadStages';
 
 /**
  * MobileNet is the AI's pretrained "eyes": it turns any picture into a list of
@@ -17,16 +18,40 @@ const knn = knnClassifier.create();
 
 export const EMBEDDING_ONLY = true;
 
-export async function loadModel(onStatus?: (message: string) => void): Promise<void> {
+/**
+ * Runs one throwaway inference so the very first example a child teaches is
+ * not the one that pays for shader compilation and weight upload. Failing
+ * here must not fail the whole boot -- the model is already usable.
+ */
+async function warmUp(): Promise<void> {
+  if (!model || typeof document === 'undefined') return;
+  try {
+    const blank = document.createElement('canvas');
+    blank.width = MODEL_INPUT_SIZE;
+    blank.height = MODEL_INPUT_SIZE;
+    const ctx = blank.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, blank.width, blank.height);
+    const tensor = tf.tidy(() => model!.infer(blank, EMBEDDING_ONLY));
+    await tensor.data();
+    tensor.dispose();
+  } catch {
+    // A warm-up that fails costs nothing but a slightly slower first guess.
+  }
+}
+
+export async function loadModel(onStage?: (stage: LoadStageId) => void): Promise<void> {
   if (model) return;
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    onStatus?.('Waking up the graphics engine…');
+    onStage?.('engine');
     await tf.ready();
-    onStatus?.('Loading AI vision…');
+    onStage?.('vision');
     model = await mobilenetModule.load({ version: 1, alpha: 1.0 });
-    onStatus?.('Warming up…');
+    onStage?.('warmup');
+    await warmUp();
   })();
 
   try {

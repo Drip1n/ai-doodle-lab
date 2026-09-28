@@ -89,6 +89,15 @@ function run<T>(
   );
 }
 
+/**
+ * Whether this browser actually gave us a database. False in private windows
+ * with storage blocked, or when the open request timed out -- the app keeps
+ * working, but nothing survives a reload, and the UI says so.
+ */
+export async function isAvailable(): Promise<boolean> {
+  return (await openDb()) !== null;
+}
+
 export async function loadExamples(): Promise<Example[]> {
   const rows = await run<Example[]>(EXAMPLES, 'readonly', (store) => store.getAll());
   if (!rows) return [];

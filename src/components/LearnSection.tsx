@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AiLab } from '../hooks/useAiLab';
-import type { ClassId, Example, Prediction } from '../types';
+import type { ChallengeKind, ClassId, Example, Prediction } from '../types';
 import * as ml from '../ml/classifier';
 import { toThumbnail } from '../ml/imageProcessing';
 import { DrawingCanvas, type DrawingCanvasHandle } from './DrawingCanvas';
@@ -10,7 +10,7 @@ import { ClassLabel } from './ClassLabel';
 interface Props {
   lab: AiLab;
   onGoToTeach: (classId?: ClassId) => void;
-  onGoToChallenge: () => void;
+  onGoToChallenge: (kind?: ChallengeKind) => void;
 }
 
 const PIPELINE_STAGES = [
@@ -22,6 +22,13 @@ const PIPELINE_STAGES = [
 ] as const;
 
 type CompareStage = 'idle' | 'image' | 'features' | 'neighbors' | 'prediction';
+
+/**
+ * Where the compared picture came from. A stored example is still inside the
+ * live classifier, so its prediction is not a fair test of anything -- the
+ * UI has to say so instead of quietly hiding it from the neighbour list.
+ */
+type CompareSource = 'stored' | 'new';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -79,15 +86,15 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
   const [playing, setPlaying] = useState(false);
   const [eyesOpen, setEyesOpen] = useState(false);
 
+  // "Still playing" is derived, not stored: the run is over the moment the
+  // last stage lights up, so nothing has to switch a flag back off.
+  const isPlaying = playing && activeStage < PIPELINE_STAGES.length - 1;
+
   useEffect(() => {
-    if (!playing) return;
-    if (activeStage >= PIPELINE_STAGES.length - 1) {
-      setPlaying(false);
-      return;
-    }
+    if (!isPlaying) return;
     const timer = window.setTimeout(() => setActiveStage((value) => value + 1), 750);
     return () => window.clearTimeout(timer);
-  }, [playing, activeStage]);
+  }, [isPlaying, activeStage]);
 
   const playPipeline = () => {
     setActiveStage(0);
@@ -111,10 +118,17 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
   const [drawMode, setDrawMode] = useState(false);
   const [canvasDirty, setCanvasDirty] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
+  const [compareSource, setCompareSource] = useState<CompareSource>('new');
   const canvasRef = useRef<DrawingCanvasHandle>(null);
 
-  const runComparison = async (thumb: string, embedding: Float32Array, excludeId?: string) => {
+  const runComparison = async (
+    thumb: string,
+    embedding: Float32Array,
+    source: CompareSource,
+    excludeId?: string,
+  ) => {
     setCompareError(null);
+    setCompareSource(source);
     setComparePrediction(null);
     setNeighbors([]);
     setCompareThumb(thumb);
@@ -145,7 +159,7 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
     const example = lab.pickRandomExample();
     if (!example) return;
     setDrawMode(false);
-    await runComparison(example.thumbnail, example.embedding, example.id);
+    await runComparison(example.thumbnail, example.embedding, 'stored', example.id);
   };
 
   const handleCompareDrawing = async () => {
@@ -153,7 +167,7 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
     if (!canvas) return;
     try {
       const embedding = await ml.embedToArray(canvas);
-      await runComparison(toThumbnail(canvas), embedding);
+      await runComparison(toThumbnail(canvas), embedding, 'new');
     } catch (error) {
       setCompareError(error instanceof Error ? error.message : 'Could not process that drawing.');
     }
@@ -167,7 +181,7 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
 
   const tryExperiment = () => {
     if (!experiment) return;
-    if (experiment.goTo === 'challenge') onGoToChallenge();
+    if (experiment.goTo === 'challenge') onGoToChallenge('draw');
     else onGoToTeach(weakest?.id);
     setExperimentId(null);
   };
@@ -183,7 +197,7 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
       <section className="panel">
         <div className="learnSectionHead">
           <h3 className="panelTitle">The visual learning pipeline</h3>
-          <button type="button" className="btn btnGhost" onClick={playPipeline} disabled={playing}>
+          <button type="button" className="btn btnGhost" onClick={playPipeline} disabled={isPlaying}>
             ▶ Play
           </button>
         </div>
@@ -270,8 +284,8 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
       <section className="panel">
         <h3 className="panelTitle">What happens with something new?</h3>
         <p className="hintLine">
-          Pick one of your real examples, or draw something new, and watch the AI actually compare
-          it.
+          Pick one of your real examples to see how the comparison works, or draw something new for
+          a real test.
         </p>
 
         <div className="compareActions">
@@ -306,6 +320,17 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
             <div className="compareStep">
               <p className="compareStepLabel">1. The picture</p>
               {compareThumb && <img src={compareThumb} alt="What is being compared" className="compareThumb" />}
+              {compareSource === 'stored' ? (
+                <p className="compareHonesty">
+                  🧠 <strong>This picture is already in the AI&rsquo;s memory.</strong> You taught
+                  it this one, so guessing it right proves nothing — watch{' '}
+                  <em>how</em> it compares instead. For a real test, draw something new.
+                </p>
+              ) : (
+                <p className="compareHonesty isNew">
+                  ✨ <strong>The AI has never seen this drawing.</strong> This one is a real test.
+                </p>
+              )}
             </div>
 
             {(compareStage === 'features' || compareStage === 'neighbors' || compareStage === 'prediction') && (
@@ -325,6 +350,12 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
             {(compareStage === 'neighbors' || compareStage === 'prediction') && (
               <div className="compareStep">
                 <p className="compareStepLabel">3. Closest learned examples</p>
+                {compareSource === 'stored' && neighbors.length > 0 && (
+                  <p className="compareStepNote">
+                    The picture itself is left out of this list — otherwise it would just match
+                    itself.
+                  </p>
+                )}
                 {neighbors.length === 0 ? (
                   <p className="hintLine">Not enough other examples yet to compare against.</p>
                 ) : (
@@ -352,12 +383,20 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
               <div className="compareStep">
                 <p className="compareStepLabel">4. The guess</p>
                 {guessDef ? (
-                  <p className="compareGuess">
-                    Based on the closest examples, the AI guesses:{' '}
-                    <strong style={{ color: guessDef.accent }}>
-                      <ClassLabel def={guessDef} />
-                    </strong>
-                  </p>
+                  <>
+                    <p className="compareGuess">
+                      Based on the closest examples, the AI guesses:{' '}
+                      <strong style={{ color: guessDef.accent }}>
+                        <ClassLabel def={guessDef} />
+                      </strong>
+                    </p>
+                    {compareSource === 'stored' && (
+                      <p className="compareStepNote">
+                        Remember: this exact picture is one of the examples the AI is comparing
+                        against, so this is an easy question for it.
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <p className="hintLine">Not enough examples yet for the AI to guess confidently.</p>
                 )}
@@ -443,7 +482,7 @@ export function LearnSection({ lab, onGoToTeach, onGoToChallenge }: Props) {
           AI Draws was trained beforehand on a large collection of human sketches — it has never
           seen anything you taught your own AI.
         </p>
-        <button type="button" className="btn btnPrimary" onClick={onGoToChallenge}>
+        <button type="button" className="btn btnPrimary" onClick={() => onGoToChallenge('aidraw')}>
           🤖 Try AI Draws
         </button>
       </section>

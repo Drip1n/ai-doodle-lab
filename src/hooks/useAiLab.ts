@@ -24,6 +24,7 @@ import {
   splitOrphanExamples,
 } from '../lib/dataset';
 import * as ml from '../ml/classifier';
+import { FIRST_PROGRESS, progressFor } from '../ml/loadStages';
 import { toThumbnail } from '../ml/imageProcessing';
 import * as db from '../storage/db';
 
@@ -38,18 +39,22 @@ export interface TeachResult {
 export function useAiLab() {
   const [modelStatus, setModelStatus] = useState<ModelStatus>({
     state: 'loading',
-    message: 'Getting your AI ready…',
+    progress: FIRST_PROGRESS,
   });
   const [classes, setClasses] = useState<LearningClass[]>([]);
   const [examples, setExamples] = useState<Example[]>([]);
   const [stats, setStats] = useState<ChallengeStats>(EMPTY_STATS);
   const [memoryStats, setMemoryStats] = useState<ChallengeStats>(EMPTY_STATS);
   const [aiDrawStats, setAiDrawStats] = useState<AiDrawStats>(EMPTY_AI_DRAW_STATS);
+  const [storageAvailable, setStorageAvailable] = useState(true);
 
   const boot = useCallback(async () => {
-    setModelStatus({ state: 'loading', message: 'Getting your AI ready…' });
+    setModelStatus({ state: 'loading', progress: FIRST_PROGRESS });
     try {
-      await ml.loadModel((message) => setModelStatus({ state: 'loading', message }));
+      await ml.loadModel((stage) =>
+        setModelStatus({ state: 'loading', progress: progressFor(stage) }),
+      );
+      setModelStatus({ state: 'loading', progress: progressFor('workshop') });
 
       const [storedExamples, storedClasses, storedStats, storedMemoryStats, storedAiDrawStats] =
         await Promise.all([
@@ -80,18 +85,22 @@ export function useAiLab() {
       if (storedMemoryStats) setMemoryStats(storedMemoryStats);
       if (storedAiDrawStats) setAiDrawStats(storedAiDrawStats);
 
+      // A browser with IndexedDB blocked still runs the whole workshop, it
+      // just forgets everything when the tab closes -- worth saying quietly.
+      setStorageAvailable(await db.isAvailable());
+
       setModelStatus({ state: 'ready' });
     } catch (error) {
-      setModelStatus({
-        state: 'error',
-        message:
-          error instanceof Error && error.message
-            ? error.message
-            : 'The AI vision model could not be downloaded.',
-      });
+      // The child gets one friendly sentence; the details stay in the console
+      // for whoever is running the workshop.
+      console.error('AI Doodle Lab: model loading failed', error);
+      setModelStatus({ state: 'error' });
     }
   }, []);
 
+  // Downloading the model is exactly the "synchronise with an external
+  // system" case an effect is for; the status updates it reports back are
+  // the point of it, not an accident. (oxlint flags the pattern generically.)
   useEffect(() => {
     void boot();
   }, [boot]);
@@ -248,6 +257,7 @@ export function useAiLab() {
 
   return {
     modelStatus,
+    storageAvailable,
     retryLoad: boot,
     classes,
     examples,

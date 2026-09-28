@@ -8,6 +8,10 @@
 
   --brand: #6b4ef2;
   --brand-soft: #efeaff;
+  /* Fontys ICT purple, used sparingly as a supporting accent -- the app
+     keeps its own warm identity, this just nods to whose workshop it is. */
+  --fontys: #663366;
+  --fontys-soft: #f4ecf4;
   --danger: #d8453a;
   --success: #27a567;
 
@@ -61,6 +65,13 @@ button {
   font: inherit;
   color: inherit;
   cursor: pointer;
+}
+
+/* Every interactive element gets a visible keyboard ring, not just .btn. */
+:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 3px;
+  border-radius: 6px;
 }
 
 img {

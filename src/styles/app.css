@@ -16,6 +16,14 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--line);
+  /* One hairline of colour: the app's own violet easing into Fontys purple.
+     Enough of a nod to place the workshop, not enough to take it over. */
+  border-image: linear-gradient(90deg, var(--brand) 0%, var(--fontys) 55%, var(--line) 100%) 1;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
 }
 
 .brand {
@@ -52,6 +60,22 @@
   font-weight: 600;
 }
 
+/* The Fontys ICT mark sits beside the title as a supporting credit -- it is
+   deliberately smaller than the app's own name and never repeated nearby. */
+.brandPartner {
+  display: flex;
+  align-items: center;
+  padding-left: 14px;
+  margin-left: 4px;
+  border-left: 2px solid var(--line);
+}
+
+.brandPartnerMark {
+  height: 38px;
+  width: auto;
+  border-radius: 6px;
+}
+
 .headerRight {
   display: flex;
   align-items: center;
@@ -73,6 +97,25 @@
   font-size: 0.85rem;
   font-weight: 600;
   padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.appFooterPartner {
+  font-size: 0.78rem;
+  color: var(--fontys);
+  font-weight: 700;
+}
+
+.storageWarning {
+  background: #fff6db;
+  border: 2px solid #e6d28a;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #6a5313;
 }
 
 /* ---------- stepper ---------- */
@@ -1118,6 +1161,26 @@
   font-weight: 600;
 }
 
+/* Says plainly whether the picture being compared is one the AI already
+   holds -- the demo would otherwise look like a fair test when it is not. */
+.compareHonesty {
+  margin-top: 8px;
+  max-width: 46ch;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tint);
+  border: 2px solid var(--line);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.compareHonesty.isNew {
+  background: #e3f7ec;
+  border-color: #b6e3ca;
+}
+
 .compareThumb {
   width: 96px;
   height: 96px;
@@ -1361,6 +1424,21 @@
   z-index: 40;
 }
 
+/* The startup screen is the whole first impression, so it owns the viewport
+   rather than floating over a half-built app. */
+.loaderOverlay {
+  background: radial-gradient(120% 90% at 50% 0%, #fffaf2 0%, var(--bg) 55%, var(--bg-tint) 100%);
+  backdrop-filter: none;
+  overflow-y: auto;
+  z-index: 50;
+  transition: opacity 0.4s ease;
+}
+
+.loaderOverlay.isLeaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .loaderCard,
 .modalCard {
   background: var(--surface);
@@ -1376,9 +1454,36 @@
   gap: 12px;
 }
 
+.loaderCard {
+  max-width: 480px;
+  border: 2px solid var(--line);
+  gap: 10px;
+}
+
 .loaderRobot {
   font-size: 3.4rem;
   animation: bob 1.6s ease-in-out infinite;
+}
+
+.loaderRobot.isReady {
+  animation: pop 0.5s ease;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.22);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.loaderLead {
+  font-weight: 800;
+  color: var(--ink);
 }
 
 @keyframes bob {
@@ -1399,36 +1504,82 @@
   font-weight: 600;
 }
 
+.loaderProgress {
+  width: 100%;
+  margin-top: 4px;
+}
+
 .loaderBar {
   width: 100%;
-  height: 10px;
+  height: 14px;
   border-radius: 999px;
   background: var(--bg-tint);
+  border: 2px solid var(--line);
   overflow: hidden;
 }
 
-.loaderBar span {
+.loaderBarFill {
   display: block;
-  width: 40%;
   height: 100%;
   border-radius: 999px;
-  background: var(--brand);
-  animation: slide 1.4s ease-in-out infinite;
+  background: linear-gradient(90deg, var(--brand), var(--fontys));
+  /* Animates to the next stage value; the value itself is never invented. */
+  transition: width 0.5s ease;
 }
 
-@keyframes slide {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(250%);
-  }
+.loaderMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+  letter-spacing: 0.02em;
+}
+
+.loaderPercent {
+  font-variant-numeric: tabular-nums;
+  color: var(--brand);
 }
 
 .loaderNote {
   font-size: 0.85rem;
   color: var(--ink-soft);
   font-weight: 700;
+}
+
+.loaderFine {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  font-weight: 600;
+  max-width: 34ch;
+}
+
+.loaderHonesty {
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.loaderPartner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: 2px solid var(--line);
+  width: 100%;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--fontys);
+}
+
+.loaderPartnerMark {
+  height: 30px;
+  width: auto;
+  border-radius: 5px;
 }
 
 .modalActions {
@@ -1546,6 +1697,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 18px 12px;
   font-size: 1.15rem;
@@ -1580,6 +1732,19 @@
   color: var(--ink);
   opacity: 1;
   text-decoration: none;
+}
+
+/* Spells out the outcome in words as well as colour. */
+.guessMark {
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+.guessOption.isAnswer .guessMark {
+  color: var(--success);
 }
 
 .aiDrawNudge {
@@ -1685,6 +1850,34 @@
   .headerRight {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .brand {
+    gap: 10px;
+  }
+
+  .brandMark {
+    font-size: 1.7rem;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+
+  .brandPartner {
+    padding-left: 10px;
+    margin-left: 0;
+  }
+
+  .brandPartnerMark {
+    height: 30px;
+  }
+
+  .loaderCard {
+    padding: 26px 20px;
+  }
+
+  .loaderRobot {
+    font-size: 2.8rem;
   }
 
   .workspaceActions .btnBig {

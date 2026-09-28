@@ -41,8 +41,8 @@ export function PredictionResult({ prediction, classes }: Props) {
         ))}
       </ul>
       <p className="confidenceNote">
-        These numbers come from how many of the closest examples the AI remembers belong to each
-        category.
+        These are match scores, not certainty: they come from how many of the closest examples the
+        AI remembers belong to each category.
       </p>
     </div>
   );

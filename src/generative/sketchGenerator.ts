@@ -1,4 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
+import { ModelCache } from './modelCache';
 import type { SketchModelDef } from './supportedModels';
 import {
   countPoints,
@@ -142,11 +143,44 @@ function sampleCategorical(probabilities: Float32Array, random: () => number): n
 
 // ---------- loading ----------
 
-const cache = new Map<string, LoadedSketchModel>();
+/**
+ * How many category models stay in memory. Each one is a few megabytes of
+ * tensors, and a workshop can work through far more categories than that in
+ * an hour, so the oldest are disposed rather than kept forever. A model that
+ * is needed again is simply fetched again -- usually from the browser's own
+ * HTTP cache.
+ */
+export const MAX_CACHED_MODELS = 5;
+
+function disposeModel(model: LoadedSketchModel): void {
+  model.outputKernel.dispose();
+  model.outputBias.dispose();
+  model.lstmKernel.dispose();
+  model.lstmBias.dispose();
+  model.forgetBias.dispose();
+}
+
+const cache = new ModelCache<LoadedSketchModel>(MAX_CACHED_MODELS, disposeModel);
 const inFlight = new Map<string, Promise<LoadedSketchModel>>();
 
 export function isModelCached(id: string): boolean {
   return cache.has(id);
+}
+
+export function cachedModelIds(): string[] {
+  return cache.keys();
+}
+
+/**
+ * Holds a model in memory while the caller is using it. Every `retain` needs
+ * a matching `release`, so callers pair them in a `finally`.
+ */
+export function retainSketchModel(id: string): void {
+  cache.pin(id);
+}
+
+export function releaseSketchModel(id: string): void {
+  cache.release(id);
 }
 
 function buildModel(
@@ -197,9 +231,10 @@ function buildModel(
 }
 
 /**
- * Downloads and instantiates one category's model. Cached in memory, so a
- * second round with the same category costs nothing. The browser's HTTP cache
- * covers repeat visits (the host sends `cache-control: public, max-age=3600`).
+ * Downloads and instantiates one category's model. The most recent few stay
+ * in memory, so a repeat round with the same category costs nothing. The
+ * browser's HTTP cache covers repeat downloads and repeat visits (the host
+ * sends `cache-control: public, max-age=3600`).
  */
 export async function loadSketchModel(def: SketchModelDef): Promise<LoadedSketchModel> {
   const cached = cache.get(def.id);
@@ -248,13 +283,6 @@ export async function loadSketchModel(def: SketchModelDef): Promise<LoadedSketch
 
 /** Frees every cached model's tensors. */
 export function disposeSketchModels(): void {
-  for (const model of cache.values()) {
-    model.outputKernel.dispose();
-    model.outputBias.dispose();
-    model.lstmKernel.dispose();
-    model.lstmBias.dispose();
-    model.forgetBias.dispose();
-  }
   cache.clear();
 }
 

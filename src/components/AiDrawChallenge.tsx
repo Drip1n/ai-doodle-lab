@@ -4,6 +4,8 @@ import {
   generateSketch,
   isModelCached,
   loadSketchModel,
+  releaseSketchModel,
+  retainSketchModel,
   SketchGenerationError,
   type GeneratedSketch,
 } from '../generative/sketchGenerator';
@@ -20,7 +22,9 @@ import { AiSketchCanvas, SKETCH_CANVAS_SIZE } from './AiSketchCanvas';
 
 type Phase =
   | { kind: 'idle' }
-  | { kind: 'preparing' }
+  /** `firstDownload` is decided before the fetch starts, so the message
+      cannot flip to "downloading" for a model already in memory. */
+  | { kind: 'preparing'; firstDownload: boolean }
   | { kind: 'drawing' }
   | { kind: 'solved'; percent: number }
   | { kind: 'revealed' }
@@ -75,8 +79,11 @@ export function AiDrawChallenge({ lab }: { lab: AiLab }) {
       setRevealedPoints(0);
       setWrongIds([]);
       setPaused(false);
-      setPhase({ kind: 'preparing' });
+      setPhase({ kind: 'preparing', firstDownload: !isModelCached(next.answer.id) });
 
+      // Hold the model in the bounded cache for as long as this round needs
+      // it, so a later category can never dispose the one being drawn from.
+      retainSketchModel(next.answer.id);
       try {
         const model = await loadSketchModel(next.answer);
         // Sampling the sequence blocks for a few hundred milliseconds, so let
@@ -98,6 +105,10 @@ export function AiDrawChallenge({ lab }: { lab: AiLab }) {
               ? error.message
               : "That drawing idea couldn't load.",
         });
+      } finally {
+        // The finished sketch is plain coordinates; the model itself is only
+        // needed up to here, so the cache is free to reclaim it again.
+        releaseSketchModel(next.answer.id);
       }
     },
     [],
@@ -175,13 +186,19 @@ export function AiDrawChallenge({ lab }: { lab: AiLab }) {
         )}
 
         {phase.kind === 'preparing' && (
-          <div className="aiDrawIntro">
+          <div className="aiDrawIntro" role="status">
+            <p className="aiDrawIntroEmoji" aria-hidden="true">
+              🤖
+            </p>
+            <p className="lockText">Getting a new drawing idea ready…</p>
+            <p className="hintLine">
+              {phase.firstDownload
+                ? 'Downloading this drawing model for the first time (about 3 MB).'
+                : 'Preparing the drawing…'}
+            </p>
             <span className="thinking">
-              <span className="spinner" aria-hidden="true" /> AI is getting its drawing idea ready…
+              <span className="spinner" aria-hidden="true" /> Please wait
             </span>
-            {round && !isModelCached(round.answer.id) && (
-              <p className="hintLine">Downloading a drawing model for the first time (about 3 MB).</p>
-            )}
           </div>
         )}
 
@@ -245,6 +262,11 @@ export function AiDrawChallenge({ lab }: { lab: AiLab }) {
                       {option.emoji}
                     </span>
                     <span className="guessName">{option.name}</span>
+                    {/* A mark as well as a colour, so the outcome reads for
+                        anyone who cannot tell the two borders apart. */}
+                    {(wrong || isAnswer) && (
+                      <span className="guessMark">{isAnswer ? '✓ Correct' : '✕ Not this one'}</span>
+                    )}
                   </button>
                 );
               })}

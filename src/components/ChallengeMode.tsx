@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AiLab } from '../hooks/useAiLab';
 import type { ChallengeKind } from '../types';
 import { DrawChallenge } from './DrawChallenge';
@@ -24,13 +24,49 @@ const HEADINGS: Record<ChallengeKind, { title: string; sub: string }> = {
   },
   memory: {
     title: 'Can you remember what the AI learned?',
-    sub: 'Look at something you taught it, before it was taught.',
+    sub: 'Look at an example you taught the AI. Can you remember its label?',
   },
 };
 
-export function ChallengeMode({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach: () => void }) {
-  const [kind, setKind] = useState<ChallengeKind>('draw');
+/**
+ * A request from elsewhere in the app to open a particular challenge (the
+ * Learn page's "Try AI Draws" button). The token makes a repeat request for
+ * the same mode still count, and lets the child switch tabs freely afterwards.
+ */
+export interface ModeRequest {
+  kind: ChallengeKind;
+  token: number;
+}
+
+interface Props {
+  lab: AiLab;
+  onGoToTeach: () => void;
+  modeRequest?: ModeRequest | null;
+}
+
+export function ChallengeMode({ lab, onGoToTeach, modeRequest }: Props) {
+  const [kind, setKind] = useState<ChallengeKind>(modeRequest?.kind ?? 'draw');
   const heading = HEADINGS[kind];
+
+  useEffect(() => {
+    if (modeRequest) setKind(modeRequest.kind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modeRequest?.token]);
+
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const index = MODES.findIndex((mode) => mode.kind === kind);
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? MODES.length - 1
+          : (index + (event.key === 'ArrowRight' ? 1 : MODES.length - 1)) % MODES.length;
+    setKind(MODES[next].kind);
+    document.getElementById(`challenge-tab-${MODES[next].kind}`)?.focus();
+  };
 
   return (
     <div className="stage">
@@ -39,13 +75,23 @@ export function ChallengeMode({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach: (
         <p className="stageSub">{heading.sub}</p>
       </header>
 
-      <div className="challengeSwitch" role="tablist" aria-label="Challenge type">
+      {/* Roving tabindex: the tab strip is one Tab stop, arrows move inside
+          it, which is what a screen reader announces a tablist to do. */}
+      <div
+        className="challengeSwitch"
+        role="tablist"
+        aria-label="Challenge type"
+        onKeyDown={onTabKeyDown}
+      >
         {MODES.map((mode) => (
           <button
             key={mode.kind}
             type="button"
             role="tab"
+            id={`challenge-tab-${mode.kind}`}
             aria-selected={kind === mode.kind}
+            aria-controls={`challenge-panel-${mode.kind}`}
+            tabIndex={kind === mode.kind ? 0 : -1}
             className={`challengeSwitchBtn${kind === mode.kind ? ' isActive' : ''}`}
             onClick={() => setKind(mode.kind)}
           >
@@ -58,9 +104,16 @@ export function ChallengeMode({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach: (
         ))}
       </div>
 
-      {kind === 'draw' && <DrawChallenge lab={lab} onGoToTeach={onGoToTeach} />}
-      {kind === 'aidraw' && <AiDrawChallenge lab={lab} />}
-      {kind === 'memory' && <MemoryChallenge lab={lab} onGoToTeach={onGoToTeach} />}
+      <div
+        role="tabpanel"
+        id={`challenge-panel-${kind}`}
+        aria-labelledby={`challenge-tab-${kind}`}
+        tabIndex={-1}
+      >
+        {kind === 'draw' && <DrawChallenge lab={lab} onGoToTeach={onGoToTeach} />}
+        {kind === 'aidraw' && <AiDrawChallenge lab={lab} />}
+        {kind === 'memory' && <MemoryChallenge lab={lab} onGoToTeach={onGoToTeach} />}
+      </div>
     </div>
   );
 }
