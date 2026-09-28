@@ -1,0 +1,1027 @@
+/* ---------- shell ---------- */
+
+.app {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 100%;
+}
+
+.appHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brandMark {
+  font-size: 2.1rem;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  background: var(--brand-soft);
+  border-radius: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+}
+
+.brandTitle {
+  font-size: 1.45rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.brandSub {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.privacyPill {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: var(--bg-tint);
+  border-radius: 999px;
+  padding: 8px 14px;
+}
+
+.appFooter {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding-top: 8px;
+}
+
+/* ---------- stepper ---------- */
+
+.stepper {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  background: var(--bg-tint);
+  border-radius: 999px;
+  padding: 8px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 800;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.step:hover {
+  color: var(--ink);
+}
+
+.step.isActive {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.stepNumber {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  font-size: 0.85rem;
+  font-weight: 900;
+}
+
+.step.isActive .stepNumber {
+  background: var(--brand);
+  color: #fff;
+}
+
+/* ---------- stages ---------- */
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: rise 0.28s ease;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.stageHead {
+  text-align: center;
+  padding: 4px 0;
+}
+
+.stageTitle {
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.stageSub {
+  color: var(--ink-soft);
+  font-weight: 600;
+  max-width: 44ch;
+  margin: 6px auto 0;
+}
+
+.workGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- class cards ---------- */
+
+.classRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.classCard {
+  position: relative;
+  background: var(--surface);
+  border: 3px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.classCard:hover {
+  transform: translateY(-3px);
+}
+
+.classCard.isSelected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: var(--shadow);
+}
+
+.classCardBody {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 20px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-lg);
+}
+
+.classEmoji {
+  font-size: 2.6rem;
+  line-height: 1.1;
+}
+
+.className,
+.classNameInput {
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.classNameInput {
+  width: 100%;
+  max-width: 150px;
+  text-align: center;
+  font-family: inherit;
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  padding: 2px 6px;
+  background: #fff;
+}
+
+.classCount {
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.classPick {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 7px 14px;
+}
+
+.classCard.isSelected .classPick {
+  background: var(--accent);
+  color: #fff;
+}
+
+.classRename {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  opacity: 0.45;
+}
+
+.classRename:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* ---------- workspace + canvas ---------- */
+
+.workspace {
+  border-width: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workspaceBadge {
+  align-self: flex-start;
+  font-weight: 900;
+  font-size: 0.95rem;
+  border-radius: 999px;
+  padding: 8px 16px;
+}
+
+.canvasBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.canvasFrame {
+  position: relative;
+  border: 3px solid var(--frame-accent, var(--line));
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.03);
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  touch-action: none;
+  cursor: crosshair;
+  background: #fff;
+}
+
+.canvasHint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #bdb3a6;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.canvasHintEmoji {
+  font-size: 2.4rem;
+}
+
+.canvasTools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.brushPicker {
+  display: flex;
+  gap: 8px;
+  background: var(--bg-tint);
+  padding: 6px;
+  border-radius: 999px;
+}
+
+.brushButton {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: transparent;
+  display: grid;
+  place-items: center;
+}
+
+.brushButton.isActive {
+  background: var(--surface);
+  border-color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.brushDot {
+  display: block;
+  background: var(--ink);
+  border-radius: 50%;
+  max-width: 26px;
+  max-height: 26px;
+}
+
+.canvasActions {
+  display: flex;
+  gap: 10px;
+}
+
+.canvasActions .btn {
+  min-height: 48px;
+  padding: 0 18px;
+  font-size: 0.95rem;
+}
+
+.workspaceActions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.workspaceActions .btnBig {
+  flex: 1;
+  min-width: 220px;
+}
+
+.uploadPreviewWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.uploadPreview {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  background: #fff;
+  border: 3px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.teachFlash {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  color: #fff;
+  animation: pop 0.25s ease;
+}
+
+.teachFlash.teaching {
+  background: var(--brand);
+}
+
+.teachFlash.done {
+  background: var(--success);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+}
+
+.hintLine {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.errorLine {
+  color: var(--danger);
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+/* ---------- coach + dataset ---------- */
+
+.coach {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--brand-soft);
+  border: 2px solid #dcd2ff;
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  font-weight: 700;
+  color: #3c2c8f;
+}
+
+.coachEmoji {
+  font-size: 1.3rem;
+  line-height: 1.2;
+}
+
+.datasetList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.datasetRow {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr 2rem;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.datasetLabel {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.datasetBarTrack {
+  height: 14px;
+  border-radius: 999px;
+  background: var(--bg-tint);
+  overflow: hidden;
+}
+
+.datasetBarFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.datasetValue {
+  text-align: right;
+  font-weight: 900;
+}
+
+.datasetTotal {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--line);
+  font-weight: 800;
+}
+
+/* ---------- memory wall ---------- */
+
+.memoryGroup + .memoryGroup {
+  margin-top: 16px;
+}
+
+.memoryHeading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.memoryCount {
+  font-size: 0.78rem;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.memoryStrip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.memoryThumb {
+  width: 58px;
+  height: 58px;
+  flex: none;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  object-fit: cover;
+  background: #fff;
+  animation: pop 0.25s ease;
+}
+
+.memoryEmpty,
+.emptyNote {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.emptyNote {
+  margin-bottom: 16px;
+}
+
+.memoryTip {
+  margin-top: 18px;
+  background: #fff6e2;
+  border: 2px solid #f4e2b8;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-weight: 700;
+  color: #7a5a12;
+  font-size: 0.92rem;
+}
+
+/* ---------- challenge ---------- */
+
+.challengeStart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 48px 12px;
+}
+
+.challengeStartEmoji {
+  font-size: 4rem;
+}
+
+.challengeBanner {
+  align-self: stretch;
+  text-align: center;
+  font-size: clamp(1.1rem, 3vw, 1.5rem);
+  font-weight: 900;
+  border-radius: var(--radius);
+  padding: 16px;
+  letter-spacing: 0.02em;
+}
+
+.thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  color: var(--brand);
+  min-height: 60px;
+}
+
+.thinking .spinner {
+  border-color: var(--brand-soft);
+  border-top-color: var(--brand);
+}
+
+.verdict {
+  border-width: 3px;
+}
+
+.verdict.isCorrect {
+  border-color: var(--success);
+  background: #f2fbf6;
+}
+
+.verdict.isWrong {
+  border-color: #f0b429;
+  background: #fffaf0;
+}
+
+.verdictTitle {
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+
+.verdictText {
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin-top: 4px;
+}
+
+.prediction {
+  margin-top: 16px;
+}
+
+.predictionLead {
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.predictionWinner {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  margin: 4px 0 16px;
+}
+
+.predictionPercent {
+  margin-left: auto;
+  font-size: 1.3rem;
+}
+
+.confidenceList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.confidenceRow {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 3rem;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.confidenceTrack {
+  height: 18px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.confidenceFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.confidenceValue {
+  text-align: right;
+  font-weight: 900;
+}
+
+.confidenceNote {
+  margin-top: 12px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.mistakeBox {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 2px dashed var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.mistakeText {
+  font-weight: 800;
+}
+
+.mistakeDone {
+  font-weight: 800;
+  color: var(--success);
+}
+
+.scoreRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.scoreBox {
+  background: var(--bg-tint);
+  border-radius: var(--radius-sm);
+  padding: 14px 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scoreValue {
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+
+.scoreLabel {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.scoreNote {
+  margin-top: 12px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.lockPanel {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 40px 22px;
+}
+
+.lockEmoji {
+  font-size: 3rem;
+}
+
+.lockText {
+  font-weight: 800;
+  max-width: 34ch;
+}
+
+.lockList {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.lockList li {
+  background: var(--bg-tint);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 800;
+}
+
+.lockList li.done {
+  background: #e3f7ec;
+  color: var(--success);
+}
+
+/* ---------- learn ---------- */
+
+.learnGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.learnCard {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.learnCard.isOpen {
+  border-color: var(--brand);
+}
+
+.learnToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 18px 20px;
+  text-align: left;
+}
+
+.learnEmoji {
+  font-size: 1.7rem;
+}
+
+.learnTitle {
+  font-weight: 900;
+  flex: 1;
+}
+
+.learnChevron {
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: var(--brand);
+}
+
+.learnBody {
+  padding: 0 20px 20px;
+  color: var(--ink-soft);
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.learnBody ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 18px;
+  list-style: disc;
+}
+
+.learnAsk {
+  font-weight: 900;
+  color: var(--ink);
+}
+
+/* ---------- overlays ---------- */
+
+.loaderOverlay,
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(36, 29, 23, 0.55);
+  backdrop-filter: blur(6px);
+  z-index: 40;
+}
+
+.loaderCard,
+.modalCard {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 34px 30px;
+  max-width: 440px;
+  width: 100%;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.loaderRobot {
+  font-size: 3.4rem;
+  animation: bob 1.6s ease-in-out infinite;
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.loaderTitle,
+.modalTitle {
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+
+.loaderStatus,
+.modalText {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.loaderBar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--bg-tint);
+  overflow: hidden;
+}
+
+.loaderBar span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand);
+  animation: slide 1.4s ease-in-out infinite;
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.loaderNote {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.modalActions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 900px) {
+  .workGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  body {
+    font-size: 16px;
+  }
+
+  .app {
+    padding: 14px 12px 36px;
+  }
+
+  .classRow {
+    grid-template-columns: 1fr;
+  }
+
+  .classCard {
+    display: flex;
+    align-items: center;
+  }
+
+  .classRename {
+    position: static;
+    flex: none;
+    margin-right: 8px;
+  }
+
+  .classCardBody {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+    text-align: left;
+  }
+
+  .classEmoji {
+    font-size: 2rem;
+  }
+
+  .classPick {
+    margin-top: 0;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .stepLabel {
+    font-size: 0.9rem;
+  }
+
+  .headerRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .workspaceActions .btnBig {
+    min-width: 100%;
+  }
+
+  .datasetRow,
+  .confidenceRow {
+    grid-template-columns: 5.5rem 1fr 2.6rem;
+  }
+}
