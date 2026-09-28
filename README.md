@@ -10,7 +10,8 @@
 [![CI](https://github.com/Drip1n/ai-doodle-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Drip1n/ai-doodle-lab/actions/workflows/ci.yml)
 
 AI Doodle Lab is a kid-friendly, browser-based machine learning workshop where students teach an
-AI to recognize their own drawings — and immediately test what it has learned.
+AI to recognize their own drawings — and immediately test what it has learned.  
+
 🌐 Live Demo: https://fontys-ai-lab.milansmiesko.nl
 
 <p align="center">
