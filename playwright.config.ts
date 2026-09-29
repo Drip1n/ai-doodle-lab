@@ -1,0 +1,35 @@
+import { defineConfig, devices } from '@playwright/test';
+
+/**
+ * Two suites with very different costs:
+ *
+ *  - `canvas-*` drive real pointer input against a bare harness page. They are
+ *    fast, need no network, and are the regression net for the mobile drawing
+ *    bug, so they run on three engines.
+ *  - `app-*` drive the real app, which downloads MobileNet. One mobile Chromium
+ *    run is enough to cover the workshop-critical paths.
+ */
+const CANVAS = /drawing-canvas\.spec\.ts/;
+const APP = /workshop\.spec\.ts/;
+
+export default defineConfig({
+  testDir: './e2e',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  workers: process.env.CI ? 2 : undefined,
+  reporter: process.env.CI ? [['github'], ['list']] : [['list']],
+  use: { baseURL: 'http://127.0.0.1:4173', trace: 'on-first-retry' },
+  projects: [
+    { name: 'canvas-desktop-chromium', testMatch: CANVAS, use: { ...devices['Desktop Chrome'] } },
+    { name: 'canvas-mobile-chromium', testMatch: CANVAS, use: { ...devices['Pixel 7'] } },
+    { name: 'canvas-mobile-webkit', testMatch: CANVAS, use: { ...devices['iPhone 13'] } },
+    { name: 'app-mobile-chromium', testMatch: APP, use: { ...devices['Pixel 7'] } },
+  ],
+  webServer: {
+    command: 'npx vite --port 4173 --strictPort --host 127.0.0.1',
+    url: 'http://127.0.0.1:4173/e2e/harness/index.html',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
+});

@@ -106,8 +106,12 @@ img {
     opacity 0.15s ease;
 }
 
-.btn:hover:not(:disabled) {
-  transform: translateY(-2px);
+/* Touch devices keep :hover latched after a tap, which left buttons looking
+   permanently lifted on a phone. Only pointers that can really hover get it. */
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
 }
 
 .btn:active:not(:disabled) {

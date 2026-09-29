@@ -19,3 +19,18 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+      # Only Chromium: it covers both the desktop and the mobile-touch canvas
+      # projects, and installing WebKit as well roughly doubles the setup time
+      # for no extra signal in CI. The WebKit project stays available locally
+      # via `npm run test:e2e:canvas`.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- --project=canvas-desktop-chromium --project=canvas-mobile-chromium --project=app-mobile-chromium
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
