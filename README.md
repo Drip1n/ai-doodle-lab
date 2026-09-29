@@ -104,6 +104,37 @@ npm run build
 npm run preview
 ```
 
+### Checks
+
+```bash
+npm run lint         # oxlint
+npm test             # Vitest unit suites (src/**/*.test.ts)
+npm run build        # type-check + production build
+npm run test:e2e     # Playwright, real browser input
+```
+
+`npm run test:e2e` needs browsers once: `npx playwright install --with-deps`. It runs two suites:
+
+- **`e2e/drawing-canvas.spec.ts`** — the pointer-lifecycle regression net for the canvas, driven
+  with real touch and mouse input on desktop Chromium, mobile Chromium and mobile WebKit. No
+  network needed; it mounts the canvas on its own harness page (`e2e/harness/`, dev-only — the
+  production build's single entry is `index.html`).
+- **`e2e/workshop.spec.ts`** — the workshop-critical paths against the real app, which downloads
+  MobileNet, so it needs network and runs on mobile Chromium only.
+
+Run just the fast one with `npm run test:e2e:canvas`.
+
+## 🌱 Development workflow
+
+```text
+main                      production — Cloudflare deploys this branch
+develop                   integration — new work lands here first
+feature/* fix/* chore/*   short-lived, branched off develop, deleted after merge
+```
+
+Work on a short-lived branch, merge it into `develop`, verify, then merge `develop` into `main`.
+Keep `main` always deployable and never force-push it.
+
 ## 📋 Requirements
 
 - Node.js 20+ (CI runs Node 24)
@@ -234,6 +265,11 @@ src/
   storage/       db.ts — IndexedDB persistence
   styles/        base.css (tokens + primitives), app.css (components)
   types/         shared types and class definitions
+e2e/
+  drawing-canvas.spec.ts   pointer-lifecycle regressions (touch, mouse, pen)
+  workshop.spec.ts         workshop-critical paths against the real app
+  harness/                 dev-only page that mounts DrawingCanvas on its own
+  support/                 touch injection and ink-measuring helpers
 ```
 
 ## 🗺 Future ideas

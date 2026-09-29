@@ -42,7 +42,26 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(function Dra
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const strokesRef = useRef<Stroke[]>([]);
-  const drawingRef = useRef(false);
+  /**
+   * Exactly one pointer owns the canvas at a time.
+   *
+   * A phone hands us far more pointers than a mouse ever does: a resting
+   * thumb, the side of a palm, a curious second finger. With a single
+   * `drawing` boolean any of those would hijack or end the stroke the child
+   * is actually drawing, and the canvas would go dead until they lifted off
+   * and started again. Tracking the id of the pointer that started the stroke
+   * lets every other pointer be ignored outright.
+   *
+   * Note that WebKit reuses pointer id 0 for touches, so every check here
+   * compares against `null` rather than testing for truthiness.
+   */
+  const activePointerIdRef = useRef<number | null>(null);
+  /**
+   * The stroke that pointer is drawing, held directly rather than looked up as
+   * "the last one": Clear and Undo can empty the array while a finger is still
+   * down, and indexing into it would then read `undefined`.
+   */
+  const activeStrokeRef = useRef<Stroke | null>(null);
   const [brush, setBrush] = useState(BRUSH_SIZES[1].value);
   const [dirty, setDirty] = useState(false);
 
@@ -86,27 +105,59 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(function Dra
     redraw();
   }, [redraw]);
 
+  /**
+   * Forget the pointer that owns the canvas. Called from every way a stroke
+   * can end -- a clean lift, a cancel, a capture the browser took back, an
+   * unmount -- because stale pointer state must never be able to block the
+   * next stroke.
+   */
+  const endStroke = useCallback((pointerId: number | null) => {
+    activePointerIdRef.current = null;
+    activeStrokeRef.current = null;
+    if (pointerId === null) return;
+    try {
+      canvasRef.current?.releasePointerCapture(pointerId);
+    } catch {
+      // The browser had already released it; nothing left to do.
+    }
+  }, []);
+
   const clear = useCallback(() => {
     strokesRef.current = [];
+    activeStrokeRef.current = null;
     redraw();
     markDirty(false);
   }, [markDirty, redraw]);
 
   const undo = useCallback(() => {
+    const removed = strokesRef.current[strokesRef.current.length - 1];
     strokesRef.current = strokesRef.current.slice(0, -1);
+    if (activeStrokeRef.current === removed) activeStrokeRef.current = null;
     redraw();
     markDirty(strokesRef.current.length > 0);
   }, [markDirty, redraw]);
 
   useImperativeHandle(ref, () => ({ getCanvas: () => canvasRef.current, clear }), [clear]);
 
-  const capturePointer = (pointerId: number) => {
-    try {
-      canvasRef.current?.setPointerCapture(pointerId);
-    } catch {
-      // Some input devices do not support capture; drawing still works.
-    }
-  };
+  /**
+   * Safety net for the lift we never see on the canvas itself: if capture
+   * could not be taken, or the browser handed the gesture to something else,
+   * the pointerup lands on another element. Without this the canvas would
+   * still believe a finger is down.
+   */
+  useEffect(() => {
+    const finish = (event: PointerEvent) => {
+      if (event.pointerId !== activePointerIdRef.current) return;
+      endStroke(event.pointerId);
+    };
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    return () => {
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      endStroke(activePointerIdRef.current);
+    };
+  }, [endStroke]);
 
   const pointFromEvent = (event: React.PointerEvent<HTMLCanvasElement>): Point => {
     const canvas = canvasRef.current!;
@@ -119,30 +170,46 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(function Dra
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (disabled) return;
+    // A second contact while a stroke is in progress is a palm or a stray
+    // finger, never a new drawing. Leave the active stroke completely alone.
+    if (activePointerIdRef.current !== null) return;
     event.preventDefault();
-    capturePointer(event.pointerId);
-    drawingRef.current = true;
-    strokesRef.current = [...strokesRef.current, { size: brush, points: [pointFromEvent(event)] }];
+    activePointerIdRef.current = event.pointerId;
+    try {
+      canvasRef.current?.setPointerCapture(event.pointerId);
+    } catch {
+      // Some input devices do not support capture; the window-level listeners
+      // above still end the stroke correctly.
+    }
+    const stroke: Stroke = { size: brush, points: [pointFromEvent(event)] };
+    activeStrokeRef.current = stroke;
+    strokesRef.current = [...strokesRef.current, stroke];
     redraw();
     markDirty(true);
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawingRef.current || disabled) return;
+    if (disabled) return;
+    if (event.pointerId !== activePointerIdRef.current) return;
+    const stroke = activeStrokeRef.current;
+    // Clear or Undo can remove the stroke out from under a finger that is
+    // still down; there is nothing left to extend.
+    if (!stroke) return;
     event.preventDefault();
-    const stroke = strokesRef.current[strokesRef.current.length - 1];
     stroke.points.push(pointFromEvent(event));
     redraw();
   };
 
   const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawingRef.current) return;
-    drawingRef.current = false;
-    try {
-      canvasRef.current?.releasePointerCapture(event.pointerId);
-    } catch {
-      // The pointer was already released by the browser.
-    }
+    if (event.pointerId !== activePointerIdRef.current) return;
+    endStroke(event.pointerId);
+  };
+
+  const handleLostPointerCapture = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (event.pointerId !== activePointerIdRef.current) return;
+    // Whatever the browser decided to do with this gesture, the stroke is over
+    // and the canvas must be ready for the next one.
+    endStroke(null);
   };
 
   return (
@@ -161,6 +228,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(function Dra
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
+          onLostPointerCapture={handleLostPointerCapture}
+          onContextMenu={(event) => event.preventDefault()}
         />
         {!dirty && (
           <div className="canvasHint" aria-hidden="true">
