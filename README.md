@@ -133,7 +133,8 @@ feature/* fix/* chore/*   short-lived, branched off develop, deleted after merge
 ```
 
 Work on a short-lived branch, merge it into `develop`, verify, then merge `develop` into `main`.
-Keep `main` always deployable and never force-push it.
+Keep `main` always deployable and never force-push it. Both `main` and `develop` require the CI
+check to pass and reject force pushes and deletions.
 
 ## 📋 Requirements
 
