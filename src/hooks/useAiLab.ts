@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MAX_CLASSES,
   MIN_CLASSES,
@@ -48,7 +48,16 @@ export function useAiLab() {
   const [aiDrawStats, setAiDrawStats] = useState<AiDrawStats>(EMPTY_AI_DRAW_STATS);
   const [storageAvailable, setStorageAvailable] = useState(true);
 
-  const boot = useCallback(async () => {
+  /**
+   * One boot at a time. Two concurrent boots each find no saved categories
+   * and each pick their own random starter set, so the second overwrites the
+   * first and the Teach stage can end up pointing at a category from the set
+   * that lost. React's StrictMode does exactly this in development, and so
+   * does a child tapping "Try again" twice on the loader.
+   */
+  const bootRef = useRef<Promise<void> | null>(null);
+
+  const bootOnce = useCallback(async () => {
     setModelStatus({ state: 'loading', progress: FIRST_PROGRESS });
     try {
       await ml.loadModel((stage) =>
@@ -97,6 +106,15 @@ export function useAiLab() {
       setModelStatus({ state: 'error' });
     }
   }, []);
+
+  const boot = useCallback(async () => {
+    if (bootRef.current) return bootRef.current;
+    const run = bootOnce().finally(() => {
+      bootRef.current = null;
+    });
+    bootRef.current = run;
+    return run;
+  }, [bootOnce]);
 
   // Downloading the model is exactly the "synchronise with an external
   // system" case an effect is for; the status updates it reports back are
@@ -251,7 +269,14 @@ export function useAiLab() {
     setStats(EMPTY_STATS);
     setMemoryStats(EMPTY_STATS);
     setAiDrawStats(EMPTY_AI_DRAW_STATS);
-    await Promise.all([db.clearExamples(), db.clearMeta()]);
+    // Order matters, and callers must await this. Clearing memory alone made
+    // the screen look reset while the examples were still on disk, so a
+    // reload in that window handed the next child the previous one's
+    // drawings. The examples go first, because they are the thing Reset has
+    // to be sure about; a reload between the two later steps only costs a
+    // fresh set of starter categories.
+    await db.clearExamples();
+    await db.clearMeta();
     await db.saveClasses(starter);
   }, []);
 

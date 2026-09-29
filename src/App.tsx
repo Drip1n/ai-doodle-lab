@@ -12,8 +12,26 @@ export default function App() {
   const lab = useAiLab();
   const [stage, setStage] = useState<Stage>('teach');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const [modeRequest, setModeRequest] = useState<ModeRequest | null>(null);
+
+  /**
+   * The dialog stays up until storage has actually been wiped. It is a few
+   * milliseconds, and it is the difference between Reset meaning "gone" and
+   * meaning "gone until someone reloads".
+   */
+  const handleReset = async () => {
+    if (resetting) return;
+    setResetting(true);
+    try {
+      await lab.reset();
+      setStage('teach');
+    } finally {
+      setResetting(false);
+      setConfirmReset(false);
+    }
+  };
 
   const goToTeach = (classId?: ClassId) => {
     setStage('teach');
@@ -85,13 +103,11 @@ export default function App() {
         <ConfirmDialog
           title="Reset your AI?"
           message="This deletes every example, your custom categories, and both challenge scores, then picks a fresh set of starter categories. It cannot be undone."
-          confirmLabel="Yes, reset everything"
-          onConfirm={() => {
-            void lab.reset();
-            setConfirmReset(false);
-            setStage('teach');
+          confirmLabel={resetting ? 'Resetting…' : 'Yes, reset everything'}
+          onConfirm={() => void handleReset()}
+          onCancel={() => {
+            if (!resetting) setConfirmReset(false);
           }}
-          onCancel={() => setConfirmReset(false)}
         />
       )}
     </div>

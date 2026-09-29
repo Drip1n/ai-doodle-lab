@@ -21,9 +21,35 @@ async function openApp(page: Page) {
   // Stage-based loader: it must report progress, then get out of the way.
   await expect(page.getByRole('progressbar', { name: 'Setup progress' })).toBeVisible();
   await expect(page.getByText(/Step \d of 4/)).toBeVisible();
-  await expect(page.getByText('Your AI is ready!')).toBeVisible({ timeout: MODEL_TIMEOUT });
-  await expect(page.locator('.loaderOverlay')).toHaveCount(0, { timeout: 10_000 });
+  await waitForReady(page);
 }
+
+/**
+ * The model host occasionally refuses a download. That is a real thing that
+ * happens on workshop wifi, and the app's answer to it is the retry card, so
+ * the suite takes that path rather than failing on someone else's CDN.
+ */
+async function waitForReady(page: Page) {
+  const ready = page.getByText('Your AI is ready!');
+  const failed = page.getByText(/couldn.t finish loading/);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await expect(ready.or(failed)).toBeVisible({ timeout: MODEL_TIMEOUT });
+    if (await ready.isVisible()) break;
+    await page.getByRole('button', { name: 'Try again' }).click();
+  }
+  await expect(ready).toBeVisible({ timeout: MODEL_TIMEOUT });
+  await expect(page.locator('.loaderOverlay')).toHaveCount(0, { timeout: 15_000 });
+}
+
+/**
+ * The count on the category the Teach stage currently has selected. Which
+ * card that is depends on the randomly picked starter set, so the tests ask
+ * for the selected one rather than assuming it is the first.
+ */
+const selectedCount = (page: Page) => page.locator('.classCard.isSelected .classCount');
+
+/** No category anywhere is holding examples. */
+const noExamplesAnywhere = (page: Page) => page.locator('.classCount', { hasText: /^[1-9]/ });
 
 /** Draws something the classifier can tell apart, using the mouse. */
 async function scribble(page: Page, seed: number) {
@@ -94,22 +120,23 @@ test('teaching examples, persistence across reload, and reset', async ({ page })
     // Teaching resets the workspace itself, ready for the next drawing.
     await expect.poll(() => ink(page)).toBe(0);
   }
-  await expect(page.locator('.classCount').first()).toHaveText('3 examples');
+  await expect(selectedCount(page)).toHaveText('3 examples');
 
   // Reload: IndexedDB must bring the dataset back and rebuild the classifier.
   await page.reload();
-  await expect(page.getByText('Your AI is ready!')).toBeVisible({ timeout: MODEL_TIMEOUT });
-  await expect(page.locator('.loaderOverlay')).toHaveCount(0, { timeout: 10_000 });
-  await expect(page.locator('.classCount').first()).toHaveText('3 examples');
+  await waitForReady(page);
+  await expect(selectedCount(page)).toHaveText('3 examples');
 
   // Reset wipes it, and the wipe survives a reload too.
   await page.getByRole('button', { name: 'Reset AI' }).click();
   await page.getByRole('button', { name: 'Yes, reset everything' }).click();
-  await expect(page.locator('.classCount').first()).toHaveText('0 examples');
+  // The dialog closes only once storage has actually been wiped, so it is
+  // also the signal that a reload is safe.
+  await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 30_000 });
+  await expect(noExamplesAnywhere(page)).toHaveCount(0);
   await page.reload();
-  await expect(page.getByText('Your AI is ready!')).toBeVisible({ timeout: MODEL_TIMEOUT });
-  await expect(page.locator('.loaderOverlay')).toHaveCount(0, { timeout: 10_000 });
-  await expect(page.locator('.classCount').first()).toHaveText('0 examples');
+  await waitForReady(page);
+  await expect(noExamplesAnywhere(page)).toHaveCount(0);
 });
 
 test('the You Draw challenge asks, guesses and takes feedback', async ({ page }) => {
