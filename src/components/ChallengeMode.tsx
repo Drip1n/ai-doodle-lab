@@ -4,8 +4,10 @@ import type { ChallengeKind } from '../types';
 import { DrawChallenge } from './DrawChallenge';
 import { AiDrawChallenge } from './AiDrawChallenge';
 import { MemoryChallenge } from './MemoryChallenge';
+import { CreateChallenge } from './CreateChallenge';
 
 const MODES: { kind: ChallengeKind; emoji: string; title: string; sub: string }[] = [
+  { kind: 'create', emoji: '🎨', title: 'Create together', sub: 'Your drawings. A new idea.' },
   { kind: 'draw', emoji: '✏️', title: 'You draw', sub: 'You draw. AI guesses.' },
   { kind: 'aidraw', emoji: '🤖', title: 'AI draws', sub: 'AI draws. You guess.' },
   {
@@ -17,6 +19,7 @@ const MODES: { kind: ChallengeKind; emoji: string; title: string; sub: string }[
 ];
 
 const HEADINGS: Record<ChallengeKind, { title: string; sub: string }> = {
+  create: { title: 'Your drawings, a new adventure!', sub: 'Choose something you taught your AI, then give it a little twist.' },
   draw: { title: 'Can your AI guess it?', sub: 'Draw anything your AI has learned.' },
   aidraw: {
     title: "Can you guess the AI's drawing?",
@@ -113,6 +116,7 @@ export function ChallengeMode({ lab, onGoToTeach, modeRequest }: Props) {
         {kind === 'draw' && <DrawChallenge lab={lab} onGoToTeach={onGoToTeach} />}
         {kind === 'aidraw' && <AiDrawChallenge lab={lab} />}
         {kind === 'memory' && <MemoryChallenge lab={lab} onGoToTeach={onGoToTeach} />}
+        {kind === 'create' && <CreateChallenge lab={lab} onGoToTeach={onGoToTeach} />}
       </div>
     </div>
   );

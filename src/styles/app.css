@@ -1906,3 +1906,38 @@
     min-height: 96px;
   }
 }
+
+/* Create together uses the workshop's existing colours and rounded cards. */
+.challengeSwitch { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.createWorkshop { display: grid; gap: 16px; }
+.createNotice { padding: 12px 18px; border-radius: var(--radius-sm); background: var(--bg-tint); color: var(--ink-soft); font-size: .85rem; }
+.createColumns { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; align-items: start; }
+.createEditor, .createResult { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.createNumber { display: inline-grid; place-items: center; width: 30px; height: 30px; margin-right: 6px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-size: .9rem; }
+.createMuted { color: var(--ink-soft); font-size: .88rem; }
+.createCategories { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.createCategory { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); overflow-wrap: anywhere; }
+.createCategory > span { font-size: 1.65rem; }
+.createCategory small { color: var(--ink-soft); font-size: .75rem; }
+.createCategory.isSelected { background: var(--brand-soft); border-color: var(--brand); }
+.createCategory:disabled { opacity: .5; cursor: not-allowed; }
+.createReferences { display: grid; gap: 10px; padding: 14px; background: var(--bg); border-radius: var(--radius-sm); }
+.createThumbnails { display: flex; flex-wrap: wrap; gap: 8px; }
+.createThumbnails img { width: 64px; height: 64px; object-fit: contain; background: white; border: 2px solid var(--line); border-radius: 12px; }
+.createPromptLabel { font-size: 1.1rem; }
+.createInput { width: 100%; padding: 14px; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; resize: vertical; }
+.createInput:focus-visible { outline: 3px solid var(--brand-soft); border-color: var(--brand); }
+.createIdeas { display: flex; flex-wrap: wrap; gap: 6px; }
+.createIdeas .btn { font-size: .8rem; padding: 8px 10px; }
+.createAction { width: 100%; }
+.createPaper { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 32px; min-height: 310px; text-align: center; border: 2px dashed var(--line); border-radius: var(--radius); background: var(--bg); overflow-wrap: anywhere; }
+.createSpark { font-size: 3.5rem; }
+.createPaper p { max-width: 320px; color: var(--ink-soft); }
+.createPreviewTag { font-size: .75rem; color: var(--brand); background: var(--brand-soft); padding: 6px 12px; border-radius: 999px; }
+.createLesson { padding: 18px; border-radius: var(--radius-sm); background: var(--brand-soft); }
+.createLesson p { margin-top: 8px; color: var(--ink-soft); font-size: .88rem; }
+@media (max-width: 760px) {
+  .challengeSwitch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .createColumns { grid-template-columns: 1fr; }
+}
+.createGeneratedImage { width: 100%; max-height: 460px; object-fit: contain; border-radius: var(--radius-sm); }
