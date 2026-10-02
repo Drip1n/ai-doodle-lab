@@ -1,0 +1,43 @@
+# Everything the backend image does not need. This keeps the build context
+# small (node_modules alone is hundreds of megabytes) and makes it impossible
+# for a local environment file or build output to end up in the image.
+
+# Dependencies and build output
+node_modules
+dist
+dist-ssr
+*.local
+
+# Frontend sources and tooling: not built here
+src
+public
+index.html
+vite.config.ts
+tsconfig*.json
+.oxlintrc.json
+
+# Tests never run inside the image
+e2e
+playwright.config.ts
+playwright-report
+test-results
+blob-report
+server/*.test.mjs
+server/test-helpers.mjs
+scripts
+
+# Local environment files and the local code store. Secrets reach the
+# container through Coolify's environment settings, never through the image.
+.env
+.env.*
+server/.data
+
+# Repository metadata and documentation
+.git
+.github
+.gitignore
+docs
+README.md
+LICENSE
+*.log
+Dockerfile*

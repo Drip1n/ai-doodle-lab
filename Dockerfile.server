@@ -1,0 +1,48 @@
+# The workshop backend only: server/index.mjs, nothing else.
+#
+# The Vite frontend is deliberately not built here. It is a static bundle that
+# belongs on the static host, and building it would pull TensorFlow and React
+# into an image that never serves them.
+#
+# There is also no `npm ci`: every module under server/ imports only node:
+# built-ins, so the backend has no package to install. The dependencies in
+# package.json belong to the browser bundle.
+FROM node:24-alpine
+
+# Defaults only. Every one of these is a plain environment variable and stays
+# overridable at runtime, which is how Coolify supplies the real values.
+#
+# HOST matters: the server defaults to 127.0.0.1, which inside a container
+# means nothing outside it can connect. 0.0.0.0 is what makes the published
+# port reachable.
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3000 \
+    WORKSHOP_STORE_PATH=/app/data/workshop-codes.json
+
+WORKDIR /app
+
+# Runtime sources only. Test files and helpers are excluded in .dockerignore.
+COPY server/ ./server/
+
+# The workshop-code store is written here at runtime. Creating it owned by the
+# unprivileged user means a fresh Docker named volume mounted at /app/data
+# inherits that ownership and stays writable.
+#
+# Mount a persistent volume here. Without one the codes and their usage
+# counters are lost on every redeploy.
+RUN mkdir -p /app/data && chown -R node:node /app/data
+
+USER node
+
+EXPOSE 3000
+
+# Uses the server's own health route, so an unreadable code store or a missing
+# provider configuration shows up as an unhealthy container rather than a
+# surprise at the start of a workshop.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+
+# No secrets are baked in: APP_ORIGIN, PORTKEY_* and ADMIN_USERS_JSON all come
+# from the environment at run time.
+CMD ["node", "server/index.mjs"]
