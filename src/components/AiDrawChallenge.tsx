@@ -26,6 +26,7 @@ type Phase =
       cannot flip to "downloading" for a model already in memory. */
   | { kind: 'preparing'; firstDownload: boolean }
   | { kind: 'drawing' }
+  | { kind: 'waiting' }
   | { kind: 'solved'; percent: number }
   | { kind: 'revealed' }
   | { kind: 'failed'; message: string };
@@ -135,7 +136,7 @@ export function AiDrawChallenge({ lab }: { lab: AiLab }) {
       shownRef.current = Math.min(sketch.totalPoints, shownRef.current + perSecond * elapsed);
       setRevealedPoints(Math.floor(shownRef.current));
       if (shownRef.current >= sketch.totalPoints) {
-        finishUnsolved();
+        setPhase({ kind: 'waiting' });
         return;
       }
       frame = requestAnimationFrame(tick);
@@ -143,10 +144,10 @@ export function AiDrawChallenge({ lab }: { lab: AiLab }) {
 
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [phase.kind, paused, fast, sketch, finishUnsolved]);
+  }, [phase.kind, paused, fast, sketch]);
 
   const guess = (option: SketchModelDef) => {
-    if (phase.kind !== 'drawing' || !round || !sketch || resolvedRef.current) return;
+    if ((phase.kind !== 'drawing' && phase.kind !== 'waiting') || !round || !sketch || resolvedRef.current) return;
     if (option.id !== round.answer.id) {
       setWrongIds((current) => [...current, option.id]);
       return;
@@ -245,6 +246,8 @@ export function AiDrawChallenge({ lab }: { lab: AiLab }) {
               </div>
             )}
 
+            {phase.kind === 'waiting' && <p className="hintLine" role="status">Drawing finished. Take your time and choose an answer!</p>}
+            {(phase.kind === 'drawing' || phase.kind === 'waiting') && <button type="button" className="btn btnGhost" onClick={() => { if (sketch) { shownRef.current = sketch.totalPoints; setRevealedPoints(sketch.totalPoints); } finishUnsolved(); }}>Show me the answer</button>}
             <p className="verdictAskTitle">What is it?</p>
             <div className="guessGrid">
               {round.options.map((option) => {
@@ -255,7 +258,7 @@ export function AiDrawChallenge({ lab }: { lab: AiLab }) {
                     key={option.id}
                     type="button"
                     className={`guessOption${wrong ? ' isWrong' : ''}${isAnswer ? ' isAnswer' : ''}`}
-                    disabled={showAnswer || wrong || phase.kind !== 'drawing'}
+                    disabled={showAnswer || wrong || (phase.kind !== 'drawing' && phase.kind !== 'waiting')}
                     onClick={() => guess(option)}
                   >
                     <span className="guessEmoji" aria-hidden="true">
@@ -272,8 +275,8 @@ export function AiDrawChallenge({ lab }: { lab: AiLab }) {
               })}
             </div>
 
-            {phase.kind === 'drawing' && wrongIds.length > 0 && (
-              <p className="aiDrawNudge">Not quite — keep watching!</p>
+            {(phase.kind === 'drawing' || phase.kind === 'waiting') && wrongIds.length > 0 && (
+              <p className="aiDrawNudge">Not quite — try another answer!</p>
             )}
 
             {phase.kind === 'solved' && answer && (

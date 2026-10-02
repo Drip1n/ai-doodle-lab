@@ -50,3 +50,14 @@ test('unconfigured server does not call a provider', async()=>{
  try { assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/api/generate-image`,{method:'POST'})).status,503); }
  finally { await new Promise(resolve=>server.close(resolve)); }
 });
+
+test('selected styles survive validation and do not inherit photorealism', () => {
+ for (const style of ['realistic', 'cartoon', 'painting', 'toy']) {
+  const validated=validateInput({...input,style});
+  assert.equal(validated.style,style);
+  const prompt=composePrompt(validated);
+  assert.match(prompt,/main subject must be "Cat"/);
+  if(style !== 'realistic') assert.doesNotMatch(prompt,/Photorealistic:|photographic detail/);
+ }
+ assert.throws(()=>validateInput({...input,style:'unknown'}));
+});

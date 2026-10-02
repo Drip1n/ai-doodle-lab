@@ -4,6 +4,7 @@ export const IMAGE_ENDPOINT = import.meta.env.VITE_IMAGE_ENDPOINT?.trim() ?? '';
 export interface ImageRequest {
   category: { id: string; name: string };
   idea: string;
+  style?: 'realistic' | 'cartoon' | 'painting' | 'toy';
   references: string[];
 }
 

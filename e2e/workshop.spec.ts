@@ -223,7 +223,9 @@ test('Learn and every challenge tab open cleanly, including by keyboard', async 
 
   await stage(page, 'Challenge').click();
   const tabs = page.getByRole('tab');
-  await expect(tabs).toHaveCount(3);
+  await expect(tabs).toHaveCount(4);
+  await tabs.filter({ hasText: 'Let AI create' }).click();
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('Your drawings, a new adventure!');
   await tabs.filter({ hasText: 'Memory' }).click();
   await expect(page.getByRole('heading', { name: /remember what the AI learned/ })).toBeVisible();
   await tabs.filter({ hasText: 'AI draws' }).click();

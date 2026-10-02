@@ -7,7 +7,7 @@ import { MemoryChallenge } from './MemoryChallenge';
 import { CreateChallenge } from './CreateChallenge';
 
 const MODES: { kind: ChallengeKind; emoji: string; title: string; sub: string }[] = [
-  { kind: 'create', emoji: '🎨', title: 'Create together', sub: 'Your drawings. A new idea.' },
+  { kind: 'create', emoji: '🎨', title: 'Let AI create', sub: 'AI creates from your drawings and ideas.' },
   { kind: 'draw', emoji: '✏️', title: 'You draw', sub: 'You draw. AI guesses.' },
   { kind: 'aidraw', emoji: '🤖', title: 'AI draws', sub: 'AI draws. You guess.' },
   {

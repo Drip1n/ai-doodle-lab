@@ -2,11 +2,33 @@ import { useEffect, useRef, useState } from 'react';
 import type { AiLab } from '../hooks/useAiLab';
 import { IMAGE_MODE, IMAGE_ENDPOINT, requestImage } from '../generative/imageApi';
 
-const IDEAS = ['wearing a funny hat', 'on the Moon', 'in a magical garden', 'made of rainbow colours'];
+const PROMPT_GROUPS = [
+  { id: 'look', title: 'Choose its look', emoji: '🎨', options: [
+    { label: 'Classic', text: 'a classic appearance that suits the object', emoji: '🌿' },
+    { label: 'Rainbow', text: 'rainbow colours', emoji: '🌈' },
+    { label: 'Ocean blue', text: 'ocean blue colours', emoji: '💙' },
+    { label: 'Golden', text: 'golden colours', emoji: '☀️' },
+  ] },
+  { id: 'world', title: 'Choose a world', emoji: '🌍', options: [
+    { label: 'Enchanted forest', text: 'in an enchanted forest', emoji: '🌲' },
+    { label: 'On the moon', text: 'on the Moon', emoji: '🌙' },
+    { label: 'By the ocean', text: 'beside the ocean', emoji: '🌊' },
+    { label: 'Flower garden', text: 'in a flower garden', emoji: '🌸' },
+  ] },
+  { id: 'style', title: 'Choose a style', emoji: '✨', options: [
+    { label: 'Realistic', text: 'realistic style', emoji: '📷' },
+    { label: 'Cartoon', text: 'cartoon style', emoji: '✏️' },
+    { label: 'Painting', text: 'painting style', emoji: '🎨' },
+    { label: '3D toy', text: '3D toy style', emoji: '🧸' },
+  ] },
+] as const;
+
 
 export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach: () => void }) {
   const [selectedId, setSelectedId] = useState('');
-  const [idea, setIdea] = useState('');
+  const [choices, setChoices] = useState<Record<string, number>>({});
+  const complete = PROMPT_GROUPS.every((group) => choices[group.id] !== undefined);
+  const idea = complete ? PROMPT_GROUPS.map((group) => group.options[choices[group.id]].text).join(', ') : '';
   const [preview, setPreview] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -17,7 +39,7 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
   const available = lab.classes.filter((item) => (lab.counts[item.id] ?? 0) > 0);
   const selected = available.find((item) => item.id === selectedId) ?? available[0];
   const examples = lab.examples.filter((item) => item.classId === selected?.id).slice(0, 4);
-  const prompt = selected ? `Draw my ${selected.name.toLowerCase()} ${idea.trim()}` : '';
+  const prompt = selected ? `Create a picture of my ${selected.name.toLowerCase()}: ${idea}.` : '';
 
   useEffect(() => () => active.current?.abort(), []);
 
@@ -44,6 +66,7 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
       const result = await requestImage({
         category: { id: selected.id, name: selected.name },
         idea: idea.trim(),
+        style: (['realistic', 'cartoon', 'painting', 'toy'] as const)[choices.style],
         references: examples.map((item) => item.thumbnail),
       }, controller.signal, workshopCode);
       if (active.current !== controller) return;
@@ -92,14 +115,28 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
             <div className="createThumbnails">{examples.map((item, index) => <img key={item.id} src={item.thumbnail} alt={`${selected.name} example ${index + 1}`} />)}</div>
             <p className="createMuted">{live ? 'These examples guide' : 'These examples would guide'} how your {selected.name.toLowerCase()} looks.</p>
           </div>
-          <h3><span className="createNumber">2</span> Add a little imagination</h3>
-          <label className="createPromptLabel" htmlFor="create-idea">Draw my <strong>{selected.name.toLowerCase()}</strong>…</label>
-          <textarea id="create-idea" className="createInput" rows={3} maxLength={180}
-            value={idea} placeholder="wearing a funny hat…"
-            onChange={(event) => { clearResult(); setIdea(event.target.value); }}
-            aria-describedby="create-idea-help" />
-          <p id="create-idea-help" className="createMuted">Keep your {selected.name.toLowerCase()} as the star. Add a place, colours, or a fun detail!</p>
-          <div className="createIdeas">{IDEAS.map((text) => <button type="button" className="btn btnGhost" key={text} onClick={() => { clearResult(); setIdea(text); }}>{text}</button>)}</div>
+          <h3><span className="createNumber">2</span> Create your AI picture</h3>
+          <p className="createMuted">Pick one option from each group. Your {selected.name.toLowerCase()} stays the star!</p>
+          {PROMPT_GROUPS.map((group) => (
+            <fieldset className="createChoiceGroup" key={group.id}>
+              <legend>{group.emoji} {group.title}</legend>
+              <div className="createChoiceOptions">
+                {group.options.map((option, index) => (
+                  <button type="button" key={option.label}
+                    aria-pressed={choices[group.id] === index}
+                    className={`createChoice${choices[group.id] === index ? ' isSelected' : ''}`}
+                    onClick={() => { clearResult(); setChoices((previous) => ({ ...previous, [group.id]: index })); }}>
+                    <span aria-hidden="true">{option.emoji}</span> {option.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          ))}
+          <div className="createPromptSummary" aria-live="polite">
+            <strong>✨ Your picture prompt</strong>
+            <p>{complete ? prompt : `Choose a look, a world and a style (${Object.keys(choices).length}/3 chosen).`}</p>
+          </div>
+          <p className="createMuted">Change one choice to see how the same subject can look different!</p>
           {live && <><label htmlFor="workshop-code">🔑 Workshop code</label><input id="workshop-code" type="password" className="createInput" autoComplete="off" maxLength={128} value={workshopCode} onChange={(event) => setWorkshopCode(event.target.value)} placeholder="Ask your teacher" /></>}
           <button type="button" className="btn btnPrimary createAction" disabled={!idea.trim() || busy || (live && (!IMAGE_ENDPOINT || !workshopCode.trim()))} onClick={() => void create()}>{busy ? '🎨 Making your picture…' : live ? '✨ Create my picture' : '✨ Preview my idea'}</button>
           {error && <p role="alert" className="createMuted">{error}</p>}
