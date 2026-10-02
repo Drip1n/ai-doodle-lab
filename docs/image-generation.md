@@ -282,7 +282,7 @@ the admin base is then derived from it automatically.
 ```bash
 npm run lint         # oxlint
 npm test             # Vitest: frontend units and component suites
-npm run test:server  # node --test: store, codes, admin auth, queue, HTTP
+npm run test:server  # node --test: store, codes, admin auth, queue, HTTP, scripts
 npm run build        # type-check + production build
 npm run test:e2e     # Playwright, real browser
 ```

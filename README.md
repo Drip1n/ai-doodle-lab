@@ -109,7 +109,7 @@ npm run preview
 ```bash
 npm run lint         # oxlint
 npm test             # Vitest unit and component suites (src/**/*.test.{ts,tsx})
-npm run test:server  # node --test, the Node image/admin server (server/*.test.mjs)
+npm run test:server  # node --test, the Node image/admin server and its helper scripts
 npm run build        # type-check + production build
 npm run test:e2e     # Playwright, real browser input
 ```
