@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AiLab } from '../hooks/useAiLab';
 import { IMAGE_MODE, IMAGE_ENDPOINT, IMAGE_TIMEOUT_MS, requestImage } from '../generative/imageApi';
+import { downloadImage, pictureFileName } from '../generative/downloadImage';
 
 const PROMPT_GROUPS = [
   { id: 'look', title: 'Choose its look', emoji: '🎨', options: [
@@ -34,6 +35,8 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workshopCode, setWorkshopCode] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const active = useRef<AbortController | null>(null);
   const live = IMAGE_MODE === 'live';
   const available = lab.classes.filter((item) => (lab.counts[item.id] ?? 0) > 0);
@@ -50,6 +53,21 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
     setPreview(false);
     setImage(null);
     setError(null);
+    setSaveError(null);
+  };
+
+  /** The picture stays on screen either way; only the message changes. */
+  const download = async () => {
+    if (!image || !selected || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await downloadImage(image, pictureFileName(selected.name));
+    } catch {
+      setSaveError('The picture could not be saved. Try again, or press and hold the picture to save it.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const create = async () => {
@@ -153,6 +171,16 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
             {preview && <span className="createPreviewTag">Idea preview · No image generated yet</span>}
             </>}
           </div>
+          {/* Only ever shown for a real generated picture: in demo mode `image`
+              stays null and the panel shows the idea preview instead. */}
+          {image && (
+            <div className="createDownload">
+              <button type="button" className="btn btnPrimary" onClick={() => void download()} disabled={saving}>
+                {saving ? '💾 Saving…' : '⬇️ Download my picture'}
+              </button>
+              {saveError && <p role="alert" className="createMuted">{saveError}</p>}
+            </div>
+          )}
           <div className="createLesson">
             <strong>🧠 Recognising and creating are different</strong>
             <p>Your workshop AI compares drawings to recognise them. A separate image-making AI {live ? 'uses' : 'would use'} your examples as clues and your words to create a new picture. It is not trained here on your drawings.</p>

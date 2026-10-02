@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { composePrompt, config, generate, validateInput } from './generation.mjs';
+import { composePrompt, config, generate, IMAGE_QUALITIES, IMAGE_SIZES, validateInput } from './generation.mjs';
 
 const bytes = Buffer.alloc(24); Buffer.from('89504e470d0a1a0a', 'hex').copy(bytes); bytes.write('IHDR', 12); bytes.writeUInt32BE(100,16); bytes.writeUInt32BE(100,20);
 const reference = `data:image/png;base64,${bytes.toString('base64')}`;
 const input = { category: { id: 'cat', name: 'Cat' }, idea: 'in a hat', references: [reference] };
-const settings = { key: 'test-only', virtualKey: 'test-route', model: 'test-model', base: 'https://api.portkey.ai/v1', operation: 'edits' };
+const settings = { key: 'test-only', virtualKey: 'test-route', model: 'test-model', base: 'https://api.portkey.ai/v1', operation: 'edits', quality: 'medium', size: '1024x1024' };
 
 test('requires real PNG headers, bounded references and short ideas', () => {
  assert.equal(validateInput(input).images.length, 1);
@@ -16,6 +16,8 @@ test('multipart adapter sends references and handles provider errors without lea
  const result = await generate(validateInput(input), settings, async (url, options) => {
   assert.equal(url,'https://api.portkey.ai/v1/images/edits');
   assert.equal(options.body.get('image').type,'image/png');
+  assert.equal(options.body.get('quality'),'medium');
+  assert.equal(options.body.get('size'),'1024x1024');
   assert.equal(options.headers['x-portkey-api-key'],'test-only');
   return {ok:true,json:async()=>({data:[{b64_json:'YQ=='}]})};
  });
@@ -67,4 +69,61 @@ test('an unusable provider response is rejected rather than shown to a child', a
  for (const body of [{data:[{url:'http://insecure.example/a.png'}]}, {data:[{url:'javascript:alert(1)'}]}, {}, {data:[{b64_json:'not base64 ???'}]}]) {
   await assert.rejects(generate(validateInput(input), settings, async()=>({ok:true,json:async()=>body})), /did not return a usable picture/);
  }
+});
+
+test('image quality and size default, normalise and reject anything else', () => {
+ assert.equal(config({}).quality, 'medium');
+ assert.equal(config({}).size, '1024x1024');
+ // Blank or whitespace-only means "not set", which is the default.
+ assert.equal(config({IMAGE_QUALITY:'', IMAGE_SIZE:'   '}).quality, 'medium');
+ assert.equal(config({IMAGE_QUALITY:'', IMAGE_SIZE:'   '}).size, '1024x1024');
+ // A stray capital or space from a copy-paste should not take a workshop down.
+ assert.equal(config({IMAGE_QUALITY:' HIGH '}).quality, 'high');
+ assert.equal(config({IMAGE_SIZE:'1024X1536'}).size, '1024x1536');
+ for (const value of IMAGE_QUALITIES) assert.equal(config({IMAGE_QUALITY:value}).quality, value);
+ for (const value of IMAGE_SIZES) assert.equal(config({IMAGE_SIZE:value}).size, value);
+ // Anything else is an operator typo and stops the boot, naming the options.
+ for (const env of [{IMAGE_QUALITY:'ultra'},{IMAGE_QUALITY:'1024x1024'},{IMAGE_QUALITY:'0'}]) {
+  assert.throws(()=>config(env), /IMAGE_QUALITY must be one of: auto, low, medium, high/);
+ }
+ for (const env of [{IMAGE_SIZE:'4096x4096'},{IMAGE_SIZE:'1024 x 1024'},{IMAGE_SIZE:'512x512'},{IMAGE_SIZE:'high'}]) {
+  assert.throws(()=>config(env), /IMAGE_SIZE must be one of: auto, 1024x1024, 1536x1024, 1024x1536/);
+ }
+});
+
+test('the edits request carries the configured quality and size', async () => {
+ for (const [quality, size] of [['medium','1024x1024'],['high','1536x1024'],['auto','auto'],['low','1024x1536']]) {
+  await generate(validateInput(input), {...settings, quality, size}, async (url, options) => {
+   assert.equal(url,'https://api.portkey.ai/v1/images/edits');
+   assert.equal(options.body.get('quality'), quality);
+   assert.equal(options.body.get('size'), size);
+   // The parameters the adapter already sent are untouched.
+   assert.equal(options.body.get('model'),'test-model');
+   assert.equal(options.body.get('n'),'1');
+   return {ok:true,json:async()=>({data:[{b64_json:'YQ=='}]})};
+  });
+ }
+});
+
+test('an unvalidated quality or size never reaches the provider', async () => {
+ for (const broken of [{quality:'ultra'},{size:'4096x4096'},{quality:undefined},{size:undefined},{quality:'MEDIUM'}]) {
+  await assert.rejects(
+   generate(validateInput(input), {...settings, ...broken}, ()=>{throw Error('must not call a provider')}),
+   /not configured correctly/,
+   `must refuse ${JSON.stringify(broken)}`,
+  );
+ }
+});
+
+test('the chat adapter is left alone, because it has no quality or size', async () => {
+ await generate(validateInput(input), {...settings, operation:'chat'}, async (url, options) => {
+  assert.match(url,/chat\/completions$/);
+  const sent=JSON.parse(options.body);
+  assert.ok(!('quality' in sent) && !('size' in sent));
+  assert.ok(!JSON.stringify(sent).includes('1024x1024'));
+  return {ok:true,json:async()=>({choices:[{message:{images:[{image_url:{url:'data:image/png;base64,YQ=='}}]}}]})};
+ });
+ // And a bad quality cannot break the chat path, since it is never sent.
+ const result = await generate(validateInput(input), {...settings, operation:'chat', quality:'ultra'}, async()=>({ok:true,json:async()=>({choices:[{message:{images:[{image_url:{url:'data:image/png;base64,YQ=='}}]}}]})}));
+ assert.equal(result.image,'data:image/png;base64,YQ==');
 });

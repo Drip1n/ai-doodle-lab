@@ -308,6 +308,29 @@ test('the provider key stays on the server and is never echoed back', async () =
   } finally { await api.close(); }
 });
 
+test('the configured quality and size reach the provider on a real request', async () => {
+  let sent = null;
+  const api = await harness({
+    env: { IMAGE_QUALITY: 'high', IMAGE_SIZE: '1536x1024' },
+    fetcher: async (url, options) => {
+      sent = { url, quality: options.body.get('quality'), size: options.body.get('size') };
+      return { ok: true, json: async () => ({ data: [{ b64_json: 'YQ==' }] }) };
+    },
+  });
+  try {
+    const { code } = await withCode(api);
+    assert.equal((await api.generate(code)).status, 200);
+    assert.deepEqual(sent, { url: 'https://api.portkey.ai/v1/images/edits', quality: 'high', size: '1536x1024' });
+  } finally { await api.close(); }
+});
+
+test('a server configured with an impossible image size refuses to start', async () => {
+  // Failing at boot is the point: a typo must not become a surprise bill or a
+  // silently different picture halfway through a workshop.
+  assert.throws(() => createImageServer({ env: { APP_ORIGIN: ORIGIN, IMAGE_SIZE: '2048x2048' } }), /IMAGE_SIZE must be one of/);
+  assert.throws(() => createImageServer({ env: { APP_ORIGIN: ORIGIN, IMAGE_QUALITY: 'best' } }), /IMAGE_QUALITY must be one of/);
+});
+
 test('only the configured origin may talk to the server', async () => {
   const api = await harness();
   try {
@@ -682,6 +705,8 @@ test('configuration is validated at boot rather than failing mid-workshop', () =
   assert.equal(defaults.providerTimeoutMs, 90_000);
   assert.equal(defaults.globalLimit, 200);
   assert.equal(defaults.codeRateLimit, 30);
+  assert.equal(defaults.provider.quality, 'medium');
+  assert.equal(defaults.provider.size, '1024x1024');
   assert.equal(defaults.secureCookies, false);
   assert.equal(defaults.trustProxy, false);
   assert.equal(serverConfig({ APP_ORIGIN: 'https://lab.example' }).secureCookies, true, 'https means Secure cookies');
@@ -693,6 +718,7 @@ test('configuration is validated at boot rather than failing mid-workshop', () =
     { IMAGE_QUEUE_LIMIT: '-1' }, { IMAGE_QUEUE_WAIT_MS: '99999999' }, { IMAGE_PROVIDER_TIMEOUT_MS: '10' },
     { ADMIN_SESSION_TTL_MS: '5' }, { ADMIN_USERS_JSON: 'not json' },
     { ADMIN_USERS_JSON: '[{"email":"a@b.c","passwordHash":"plaintext"}]' },
+    { IMAGE_QUALITY: 'ultra' }, { IMAGE_SIZE: '4096x4096' },
   ]) {
     assert.throws(() => serverConfig(env), Error, `must refuse ${JSON.stringify(env)}`);
   }
