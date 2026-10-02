@@ -18,6 +18,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      # The Node server owns workshop codes, admin auth and the generation
+      # queue, so its suite is not optional.
+      - run: npm run test:server
       - run: npm run build
 
       # Only Chromium: it covers both the desktop and the mobile-touch canvas

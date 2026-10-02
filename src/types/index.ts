@@ -96,7 +96,7 @@ export interface AiDrawStats {
 
 export type Stage = 'teach' | 'challenge' | 'learn';
 
-export type ChallengeKind = 'draw' | 'aidraw' | 'memory';
+export type ChallengeKind = 'draw' | 'aidraw' | 'memory' | 'create';
 
 export type ModelStatus =
   | { state: 'loading'; progress: LoadProgress }

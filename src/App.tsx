@@ -7,6 +7,8 @@ import { ChallengeMode, type ModeRequest } from './components/ChallengeMode';
 import { LearnSection } from './components/LearnSection';
 import { Loader } from './components/Loader';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { AdminPanel } from './components/AdminPanel';
+import { IMAGE_MODE } from './generative/imageApi';
 
 export default function App() {
   const lab = useAiLab();
@@ -63,7 +65,7 @@ export default function App() {
           </span>
         </div>
         <div className="headerRight">
-          <span className="privacyPill">🔒 Runs on your device</span>
+          <span className="privacyPill">{IMAGE_MODE === 'live' ? '🎨 Online picture making enabled' : '🔒 Runs on your device'}</span>
           <button type="button" className="btn btnGhost" onClick={() => setConfirmReset(true)}>
             Reset AI
           </button>
@@ -91,13 +93,16 @@ export default function App() {
 
       <footer className="appFooter">
         <p>
-          🔒 Your drawings stay on this device. No accounts, nothing sent to our server, no
-          tracking.
+          {IMAGE_MODE === 'live' ? '🔒 Learning stays on this device. Creating a picture sends your idea and selected drawing clues to an image-making service.' : '🔒 Your drawings stay on this device. No accounts, nothing sent to our server, no tracking.'}
         </p>
         <p className="appFooterPartner">Built for a Fontys ICT workshop</p>
       </footer>
 
       <Loader status={lab.modelStatus} onRetry={lab.retryLoad} />
+
+      {/* Teacher-only, deliberately quiet, and only a doorway: every route it
+          calls is authenticated on the server. */}
+      <AdminPanel />
 
       {confirmReset && (
         <ConfirmDialog

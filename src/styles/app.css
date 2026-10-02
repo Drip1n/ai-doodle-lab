@@ -1906,3 +1906,82 @@
     min-height: 96px;
   }
 }
+
+/* Create together uses the workshop's existing colours and rounded cards. */
+.challengeSwitch { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.createWorkshop { display: grid; gap: 16px; }
+.createNotice { padding: 12px 18px; border-radius: var(--radius-sm); background: var(--bg-tint); color: var(--ink-soft); font-size: .85rem; }
+.createColumns { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; align-items: start; }
+.createEditor, .createResult { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.createNumber { display: inline-grid; place-items: center; width: 30px; height: 30px; margin-right: 6px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-size: .9rem; }
+.createMuted { color: var(--ink-soft); font-size: .88rem; }
+.createCategories { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.createCategory { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); overflow-wrap: anywhere; }
+.createCategory > span { font-size: 1.65rem; }
+.createCategory small { color: var(--ink-soft); font-size: .75rem; }
+.createCategory.isSelected { background: var(--brand-soft); border-color: var(--brand); }
+.createCategory:disabled { opacity: .5; cursor: not-allowed; }
+.createReferences { display: grid; gap: 10px; padding: 14px; background: var(--bg); border-radius: var(--radius-sm); }
+.createThumbnails { display: flex; flex-wrap: wrap; gap: 8px; }
+.createThumbnails img { width: 64px; height: 64px; object-fit: contain; background: white; border: 2px solid var(--line); border-radius: 12px; }
+.createPromptLabel { font-size: 1.1rem; }
+.createInput { width: 100%; padding: 14px; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; resize: vertical; }
+.createInput:focus-visible { outline: 3px solid var(--brand-soft); border-color: var(--brand); }
+.createIdeas { display: flex; flex-wrap: wrap; gap: 6px; }
+.createIdeas .btn { font-size: .8rem; padding: 8px 10px; }
+.createAction { width: 100%; }
+.createPaper { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 32px; min-height: 310px; text-align: center; border: 2px dashed var(--line); border-radius: var(--radius); background: var(--bg); overflow-wrap: anywhere; }
+.createSpark { font-size: 3.5rem; }
+.createPaper p { max-width: 320px; color: var(--ink-soft); }
+.createPreviewTag { font-size: .75rem; color: var(--brand); background: var(--brand-soft); padding: 6px 12px; border-radius: 999px; }
+.createLesson { padding: 18px; border-radius: var(--radius-sm); background: var(--brand-soft); }
+.createLesson p { margin-top: 8px; color: var(--ink-soft); font-size: .88rem; }
+@media (max-width: 760px) {
+  .challengeSwitch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .createColumns { grid-template-columns: 1fr; }
+}
+.createGeneratedImage { width: 100%; max-height: 460px; object-fit: contain; border-radius: var(--radius-sm); }
+.createChoiceGroup { border: 0; padding: 0; margin: 0; min-width: 0; }
+.createChoiceGroup legend { font-weight: 800; margin-bottom: 10px; }
+.createChoiceOptions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.createChoice { padding: 12px; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); text-align: left; font: inherit; font-size: .9rem; font-weight: 700; }
+.createChoice.isSelected { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
+.createChoice:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.createPromptSummary { padding: 16px; border-radius: var(--radius-sm); background: var(--bg); }
+.createPromptSummary p { margin-top: 8px; font-size: .9rem; color: var(--ink-soft); overflow-wrap: anywhere; }
+
+/* --- Workshop admin -------------------------------------------------------
+   Deliberately quiet: a small grey cog in the bottom-left corner that a
+   child's eye slides past. It is tidiness, not security -- everything behind
+   it is authenticated on the server. */
+.adminLaunch { position: fixed; left: 10px; bottom: 10px; z-index: 40; width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink-soft); font-size: .85rem; line-height: 1; opacity: .35; cursor: pointer; }
+.adminLaunch:hover, .adminLaunch:focus-visible { opacity: 1; }
+.adminLaunch:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
+.adminBackdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(36, 29, 23, .5); overflow: auto; }
+.adminPanel { width: min(640px, 100%); max-height: calc(100vh - 32px); overflow: auto; display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-lg); }
+.adminHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.adminHead h2 { font-size: 1.15rem; }
+.adminSectionTitle { font-size: 1rem; }
+.adminWho { font-size: .85rem; color: var(--ink-soft); }
+.adminError { padding: 10px 14px; border-radius: var(--radius-sm); background: #fdecea; color: var(--danger); font-size: .85rem; }
+.adminNotice { padding: 10px 14px; border-radius: var(--radius-sm); background: var(--bg-tint); color: var(--ink-soft); font-size: .85rem; }
+.adminForm { display: flex; flex-direction: column; gap: 8px; }
+.adminForm label { font-size: .85rem; font-weight: 700; }
+
+.adminTable { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.adminTable th { text-align: left; padding: 6px 8px; color: var(--ink-soft); font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+.adminTable td { padding: 8px; border-top: 1px solid var(--line); vertical-align: middle; }
+.adminTable tr.isInactive { color: var(--ink-soft); }
+.adminTable code { font-size: .85rem; overflow-wrap: anywhere; }
+.adminRevoke { padding: 6px 10px; font-size: .8rem; }
+
+.adminFresh { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 2px dashed var(--brand); border-radius: var(--radius-sm); background: var(--brand-soft); }
+.adminFreshCode { font-size: 1.3rem; font-weight: 800; letter-spacing: .06em; overflow-wrap: anywhere; user-select: all; }
+.adminFreshActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.adminWarning { font-size: .8rem; font-weight: 700; color: var(--danger); }
+
+@media (max-width: 540px) {
+  .adminTable th:nth-child(5), .adminTable td:nth-child(5) { padding-left: 0; }
+  .adminPanel { padding: 16px; }
+}
