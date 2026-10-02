@@ -297,3 +297,7 @@ These are possibilities, not existing features:
 ## 📄 License
 
 [MIT](LICENSE)
+
+### Optional image creation
+
+Create together defaults to Demo and requires no API key. Live uses the optional Node service in `server/`. See [setup, limits and model compatibility](docs/image-generation.md). No API keys belong in frontend settings.

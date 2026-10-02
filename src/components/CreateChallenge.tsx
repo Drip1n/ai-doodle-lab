@@ -11,6 +11,7 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
   const [image, setImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [workshopCode, setWorkshopCode] = useState('');
   const active = useRef<AbortController | null>(null);
   const live = IMAGE_MODE === 'live';
   const available = lab.classes.filter((item) => (lab.counts[item.id] ?? 0) > 0);
@@ -44,7 +45,7 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
         category: { id: selected.id, name: selected.name },
         idea: idea.trim(),
         references: examples.map((item) => item.thumbnail),
-      }, controller.signal);
+      }, controller.signal, workshopCode);
       if (active.current !== controller) return;
       setImage(result);
       setPreview(true);
@@ -99,7 +100,8 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
             aria-describedby="create-idea-help" />
           <p id="create-idea-help" className="createMuted">Keep your {selected.name.toLowerCase()} as the star. Add a place, colours, or a fun detail!</p>
           <div className="createIdeas">{IDEAS.map((text) => <button type="button" className="btn btnGhost" key={text} onClick={() => { clearResult(); setIdea(text); }}>{text}</button>)}</div>
-          <button type="button" className="btn btnPrimary createAction" disabled={!idea.trim() || busy || (live && !IMAGE_ENDPOINT)} onClick={() => void create()}>{busy ? '🎨 Making your picture…' : live ? '✨ Create my picture' : '✨ Preview my idea'}</button>
+          {live && <><label htmlFor="workshop-code">🔑 Workshop code</label><input id="workshop-code" type="password" className="createInput" autoComplete="off" maxLength={128} value={workshopCode} onChange={(event) => setWorkshopCode(event.target.value)} placeholder="Ask your teacher" /></>}
+          <button type="button" className="btn btnPrimary createAction" disabled={!idea.trim() || busy || (live && (!IMAGE_ENDPOINT || !workshopCode.trim()))} onClick={() => void create()}>{busy ? '🎨 Making your picture…' : live ? '✨ Create my picture' : '✨ Preview my idea'}</button>
           {error && <p role="alert" className="createMuted">{error}</p>}
           <button type="button" className="btn btnGhost" onClick={onGoToTeach}>Want a new subject? Teach it first →</button>
         </section>
