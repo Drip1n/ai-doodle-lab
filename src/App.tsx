@@ -7,6 +7,7 @@ import { ChallengeMode, type ModeRequest } from './components/ChallengeMode';
 import { LearnSection } from './components/LearnSection';
 import { Loader } from './components/Loader';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { AdminPanel } from './components/AdminPanel';
 import { IMAGE_MODE } from './generative/imageApi';
 
 export default function App() {
@@ -98,6 +99,10 @@ export default function App() {
       </footer>
 
       <Loader status={lab.modelStatus} onRetry={lab.retryLoad} />
+
+      {/* Teacher-only, deliberately quiet, and only a doorway: every route it
+          calls is authenticated on the server. */}
+      <AdminPanel />
 
       {confirmReset && (
         <ConfirmDialog

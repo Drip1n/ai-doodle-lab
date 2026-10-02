@@ -27,6 +27,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# Workshop code store: operational data, never committed
+server/.data/
+
 # Playwright
 /test-results/
 /playwright-report/

@@ -7,10 +7,11 @@ import { defineConfig, devices } from '@playwright/test';
  *    fast, need no network, and are the regression net for the mobile drawing
  *    bug, so they run on three engines.
  *  - `app-*` drive the real app, which downloads MobileNet. One mobile Chromium
- *    run is enough to cover the workshop-critical paths.
+ *    run is enough to cover the workshop-critical paths, the admin panel
+ *    included (its Node server is mocked at the network layer).
  */
 const CANVAS = /drawing-canvas\.spec\.ts/;
-const APP = /workshop\.spec\.ts/;
+const APP = /(workshop|admin)\.spec\.ts/;
 
 export default defineConfig({
   testDir: './e2e',

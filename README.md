@@ -108,7 +108,8 @@ npm run preview
 
 ```bash
 npm run lint         # oxlint
-npm test             # Vitest unit suites (src/**/*.test.ts)
+npm test             # Vitest unit and component suites (src/**/*.test.{ts,tsx})
+npm run test:server  # node --test, the Node image/admin server (server/*.test.mjs)
 npm run build        # type-check + production build
 npm run test:e2e     # Playwright, real browser input
 ```
@@ -121,6 +122,9 @@ npm run test:e2e     # Playwright, real browser input
   production build's single entry is `index.html`).
 - **`e2e/workshop.spec.ts`** — the workshop-critical paths against the real app, which downloads
   MobileNet, so it needs network and runs on mobile Chromium only.
+- **`e2e/admin.spec.ts`** — the teacher's path: the admin panel opens, signs in, hands out a
+  workshop code once, lists it masked, revokes it and signs out. The Node server is mocked at the
+  network layer, so it needs no provider key.
 
 Run just the fast one with `npm run test:e2e:canvas`.
 

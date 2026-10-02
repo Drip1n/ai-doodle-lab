@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AiLab } from '../hooks/useAiLab';
-import { IMAGE_MODE, IMAGE_ENDPOINT, requestImage } from '../generative/imageApi';
+import { IMAGE_MODE, IMAGE_ENDPOINT, IMAGE_TIMEOUT_MS, requestImage } from '../generative/imageApi';
 
 const PROMPT_GROUPS = [
   { id: 'look', title: 'Choose its look', emoji: '🎨', options: [
@@ -61,7 +61,7 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
     setError(null);
     setImage(null);
     setPreview(false);
-    const timeout = window.setTimeout(() => controller.abort(), 120_000);
+    const timeout = window.setTimeout(() => controller.abort(), IMAGE_TIMEOUT_MS);
     try {
       const result = await requestImage({
         category: { id: selected.id, name: selected.name },
@@ -139,6 +139,7 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
           <p className="createMuted">Change one choice to see how the same subject can look different!</p>
           {live && <><label htmlFor="workshop-code">🔑 Workshop code</label><input id="workshop-code" type="password" className="createInput" autoComplete="off" maxLength={128} value={workshopCode} onChange={(event) => setWorkshopCode(event.target.value)} placeholder="Ask your teacher" /></>}
           <button type="button" className="btn btnPrimary createAction" disabled={!idea.trim() || busy || (live && (!IMAGE_ENDPOINT || !workshopCode.trim()))} onClick={() => void create()}>{busy ? '🎨 Making your picture…' : live ? '✨ Create my picture' : '✨ Preview my idea'}</button>
+          {busy && <p className="createMuted" role="status">Making your picture… Lots of pictures may be on their way, so this can take a minute.</p>}
           {error && <p role="alert" className="createMuted">{error}</p>}
           <button type="button" className="btn btnGhost" onClick={onGoToTeach}>Want a new subject? Teach it first →</button>
         </section>
