@@ -284,14 +284,14 @@ npm run test:e2e     # Playwright — real browser input
 ```
 
 At the post-workshop iteration
-[`82891a1`](https://github.com/Drip1n/ai-doodle-lab/commit/82891a1), on Node 26 (production runs
+[`997691a`](https://github.com/Drip1n/ai-doodle-lab/commit/997691a), on Node 26 (production runs
 Node 24):
 
 | Check | Result |
 | --- | --- |
 | `npm run lint` | clean |
 | `npm test` | **143 passed** (12 files) |
-| `npm run test:server` | **108 passed** |
+| `npm run test:server` | **109 passed** |
 | `npm run build` | passed |
 | `npm run test:e2e` | **41 passed, 11 skipped** |
 
