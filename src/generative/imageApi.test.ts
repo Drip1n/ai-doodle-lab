@@ -20,7 +20,7 @@ describe('image connection', () => {
     const api = await import('./imageApi');
     const request = { category: { id: 'cat', name: 'Cat' }, idea: 'in a hat', references: ['data:image/png;base64,YQ=='] };
     const signal = new AbortController().signal;
-    expect(await api.requestImage(request, signal)).toBe('data:image/png;base64,YQ==');
+    expect(await api.requestImage(request, signal)).toEqual({ image: 'data:image/png;base64,YQ==' });
     expect(fetch).toHaveBeenCalledWith('/api/generate-image', expect.objectContaining({ body: JSON.stringify(request), signal, headers: { 'Content-Type': 'application/json' } }));
   });
 
@@ -72,6 +72,55 @@ describe('image connection', () => {
       await expect(api.requestImage(request, new AbortController().signal, bad)).rejects.toThrow('English letters');
     }
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps a share path only when it is ours and still live', async () => {
+    vi.stubEnv('VITE_IMAGE_MODE', 'live'); vi.stubEnv('VITE_IMAGE_ENDPOINT', '/api/generate-image');
+    const image = 'data:image/png;base64,YQ==';
+    const token = 'A'.repeat(43);
+    const request = { category: { id: 'cat', name: 'Cat' }, idea: 'in a hat', references: [image] };
+    const cases: [Record<string, unknown>, Record<string, unknown>][] = [
+      // Kept.
+      [{ sharePath: `/api/shared-image/${token}`, shareExpiresAt: Date.now() + 60_000 },
+        { image, sharePath: `/api/shared-image/${token}`, shareExpiresAt: expect.any(Number) }],
+      // Dropped: already expired, wrong shape, another origin, no expiry.
+      [{ sharePath: `/api/shared-image/${token}`, shareExpiresAt: Date.now() - 1 }, { image }],
+      [{ sharePath: '/api/shared-image/short', shareExpiresAt: Date.now() + 60_000 }, { image }],
+      [{ sharePath: 'https://evil.example/picture.png', shareExpiresAt: Date.now() + 60_000 }, { image }],
+      [{ sharePath: `/api/shared-image/${token}` }, { image }],
+      [{ shareExpiresAt: Date.now() + 60_000 }, { image }],
+      [{}, { image }],
+    ];
+    for (const [body, expected] of cases) {
+      vi.resetModules();
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ image, ...body }) }));
+      const api = await import('./imageApi');
+      expect(await api.requestImage(request, new AbortController().signal, 'CODE')).toEqual(expected);
+    }
+  });
+
+  it('builds the phone URL on our API origin, with no hostname hardcoded anywhere', async () => {
+    const token = 'B'.repeat(43);
+    const path = `/api/shared-image/${token}`;
+
+    // A relative endpoint means the API is this same site.
+    vi.stubEnv('VITE_IMAGE_ENDPOINT', '/api/generate-image');
+    let api = await import('./imageApi');
+    expect(api.apiOrigin()).toBe(window.location.origin);
+    expect(api.shareUrl(path)).toBe(`${window.location.origin}${path}`);
+
+    // An absolute one names the backend's own origin, path and all ignored.
+    vi.resetModules();
+    vi.stubEnv('VITE_IMAGE_ENDPOINT', 'https://api.example.test/api/generate-image');
+    api = await import('./imageApi');
+    expect(api.apiOrigin()).toBe('https://api.example.test');
+    expect(api.shareUrl(path)).toBe(`https://api.example.test${path}`);
+
+    // Nothing that is not a share path of ours becomes a URL.
+    for (const bad of [undefined, '', '/api/shared-image/short', `/api/other/${token}`,
+      `https://evil.example${path}`, `//evil.example${path}`, `${path}/../../health`]) {
+      expect(api.shareUrl(bad)).toBeNull();
+    }
   });
 
   it('rejects non-image or insecure response sources', async () => {

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { AiLab } from '../hooks/useAiLab';
 import { IMAGE_MODE, IMAGE_ENDPOINT, IMAGE_TIMEOUT_MS, requestImage } from '../generative/imageApi';
 import { downloadImage, pictureFileName } from '../generative/downloadImage';
+import { CreatingPicture } from './CreatingPicture';
+import { PhoneShare } from './PhoneShare';
 
 const PROMPT_GROUPS = [
   { id: 'look', title: 'Choose its look', emoji: '🎨', options: [
@@ -31,10 +33,10 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
   const complete = PROMPT_GROUPS.every((group) => choices[group.id] !== undefined);
   const idea = complete ? PROMPT_GROUPS.map((group) => group.options[choices[group.id]].text).join(', ') : '';
   const [preview, setPreview] = useState(false);
-  const [image, setImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workshopCode, setWorkshopCode] = useState('');
+  const [codeVisible, setCodeVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const active = useRef<AbortController | null>(null);
@@ -43,26 +45,35 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
   const selected = available.find((item) => item.id === selectedId) ?? available[0];
   const examples = lab.examples.filter((item) => item.classId === selected?.id).slice(0, 4);
   const prompt = selected ? `Create a picture of my ${selected.name.toLowerCase()}: ${idea}.` : '';
+  /**
+   * The picture itself belongs to the session, not to this panel: a child who
+   * switches to Memory and back must find it still here. Its caption comes
+   * from the snapshot stored with it, never from the choices currently on
+   * screen, so changing a look cannot relabel an older picture.
+   */
+  const picture = lab.latestCreation;
 
   useEffect(() => () => active.current?.abort(), []);
 
-  const clearResult = () => {
-    active.current?.abort();
-    active.current = null;
-    setBusy(false);
+  /**
+   * What a new choice resets: the messages and the demo-mode idea preview.
+   * Deliberately NOT the picture the child already made — losing it because
+   * they pressed "Ocean blue" to see what it would do was the single most
+   * confusing thing in the workshop.
+   */
+  const clearMessages = () => {
     setPreview(false);
-    setImage(null);
     setError(null);
     setSaveError(null);
   };
 
   /** The picture stays on screen either way; only the message changes. */
   const download = async () => {
-    if (!image || !selected || saving) return;
+    if (!picture || saving) return;
     setSaving(true);
     setSaveError(null);
     try {
-      await downloadImage(image, pictureFileName(selected.name));
+      await downloadImage(picture.image, pictureFileName(picture.categoryName));
     } catch {
       setSaveError('The picture could not be saved. Try again, or press and hold the picture to save it.');
     } finally {
@@ -77,8 +88,10 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
     active.current = controller;
     setBusy(true);
     setError(null);
-    setImage(null);
     setPreview(false);
+    // The previous picture is untouched here. It is replaced only once a new
+    // one has really arrived, so a failed or slow attempt never leaves a
+    // child staring at an empty panel.
     const timeout = window.setTimeout(() => controller.abort(), IMAGE_TIMEOUT_MS);
     try {
       const result = await requestImage({
@@ -88,8 +101,14 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
         references: examples.map((item) => item.thumbnail),
       }, controller.signal, workshopCode);
       if (active.current !== controller) return;
-      setImage(result);
-      setPreview(true);
+      lab.rememberCreation({
+        image: result.image,
+        categoryId: selected.id,
+        categoryName: selected.name,
+        prompt,
+        sharePath: result.sharePath,
+        shareExpiresAt: result.shareExpiresAt,
+      });
     } catch (cause) {
       if (active.current !== controller) return;
       setError(controller.signal.aborted ? 'That took too long. Please try again.' : cause instanceof Error ? cause.message : 'The picture could not be made. Please try again.');
@@ -122,7 +141,7 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
               return <button type="button" key={item.id} disabled={!count}
                 aria-pressed={selected.id === item.id}
                 className={`createCategory${selected.id === item.id ? ' isSelected' : ''}`}
-                onClick={() => { clearResult(); setSelectedId(item.id); }}>
+                onClick={() => { clearMessages(); setSelectedId(item.id); }}>
                 <span aria-hidden="true">{item.emoji ?? '✏️'}</span><strong>{item.name}</strong>
                 <small>{count ? `${count} example${count === 1 ? '' : 's'}` : 'Teach me first'}</small>
               </button>;
@@ -143,7 +162,7 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
                   <button type="button" key={option.label}
                     aria-pressed={choices[group.id] === index}
                     className={`createChoice${choices[group.id] === index ? ' isSelected' : ''}`}
-                    onClick={() => { clearResult(); setChoices((previous) => ({ ...previous, [group.id]: index })); }}>
+                    onClick={() => { clearMessages(); setChoices((previous) => ({ ...previous, [group.id]: index })); }}>
                     <span aria-hidden="true">{option.emoji}</span> {option.label}
                   </button>
                 ))}
@@ -155,30 +174,57 @@ export function CreateChallenge({ lab, onGoToTeach }: { lab: AiLab; onGoToTeach:
             <p>{complete ? prompt : `Choose a look, a world and a style (${Object.keys(choices).length}/3 chosen).`}</p>
           </div>
           <p className="createMuted">Change one choice to see how the same subject can look different!</p>
-          {live && <><label htmlFor="workshop-code">🔑 Workshop code</label><input id="workshop-code" type="password" className="createInput" autoComplete="off" maxLength={128} value={workshopCode} onChange={(event) => setWorkshopCode(event.target.value)} placeholder="Ask your teacher" /></>}
-          <button type="button" className="btn btnPrimary createAction" disabled={!idea.trim() || busy || (live && (!IMAGE_ENDPOINT || !workshopCode.trim()))} onClick={() => void create()}>{busy ? '🎨 Making your picture…' : live ? '✨ Create my picture' : '✨ Preview my idea'}</button>
-          {busy && <p className="createMuted" role="status">Making your picture… Lots of pictures may be on their way, so this can take a minute.</p>}
+          {/* Hidden by default, because the code is on the board for the whole
+              class. The toggle exists because a child who mistypes eight
+              characters they cannot see has no way to find out why. */}
+          {live && <>
+            <label htmlFor="workshop-code">🔑 Workshop code</label>
+            <div className="createCodeField">
+              <input id="workshop-code" type={codeVisible ? 'text' : 'password'} className="createInput"
+                autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={128}
+                value={workshopCode} onChange={(event) => setWorkshopCode(event.target.value)}
+                placeholder="Ask your teacher" />
+              <button type="button" className="createCodeToggle"
+                aria-pressed={codeVisible}
+                aria-label={codeVisible ? 'Hide the workshop code' : 'Show the workshop code'}
+                aria-controls="workshop-code"
+                onClick={() => setCodeVisible((shown) => !shown)}>
+                <span aria-hidden="true">{codeVisible ? '🙈' : '👁️'}</span>
+                <span className="createCodeToggleText">{codeVisible ? 'Hide' : 'Show'}</span>
+              </button>
+            </div>
+          </>}
+          <button type="button" className="btn btnPrimary createAction" disabled={!idea.trim() || busy || (live && (!IMAGE_ENDPOINT || !workshopCode.trim()))} onClick={() => void create()}>{busy ? '🎨 Creating your picture…' : live ? '✨ Create my picture' : '✨ Preview my idea'}</button>
           {error && <p role="alert" className="createMuted">{error}</p>}
           <button type="button" className="btn btnGhost" onClick={onGoToTeach}>Want a new subject? Teach it first →</button>
         </section>
         <section className="panel createResult" aria-live="polite">
           <h3><span className="createNumber">3</span> Discover something new</h3>
           <div className="createPaper" aria-busy={busy}>
-            {image ? <><img className="createGeneratedImage" src={image} alt={prompt} onError={() => { setImage(null); setPreview(false); setError('The picture could not be displayed. Please try again.'); }} /><p>{prompt}</p></> : <>
+            {picture ? <>
+              <div className="createPictureFrame">
+                <img className="createGeneratedImage" src={picture.image} alt={picture.prompt}
+                  onError={() => { lab.forgetCreation(); setError('The picture could not be displayed. Please try again.'); }} />
+                {busy && <div className="createPictureBusy"><CreatingPicture replacing /></div>}
+              </div>
+              <p>{picture.prompt}</p>
+            </> : busy ? <CreatingPicture /> : <>
             <span className="createSpark" aria-hidden="true">{preview ? '💡' : '✨'}</span>
-            <h3>{busy ? 'A new adventure is taking shape…' : preview ? 'Your idea is ready!' : 'What will you imagine?'}</h3>
+            <h3>{preview ? 'Your idea is ready!' : 'What will you imagine?'}</h3>
             <p>{preview ? prompt : 'Your drawings + your imagination = a new adventure.'}</p>
             {preview && <span className="createPreviewTag">Idea preview · No image generated yet</span>}
             </>}
           </div>
-          {/* Only ever shown for a real generated picture: in demo mode `image`
-              stays null and the panel shows the idea preview instead. */}
-          {image && (
+          {/* Only ever shown for a real generated picture: in demo mode
+              `lab.latestCreation` stays null and the panel shows the idea
+              preview instead. */}
+          {picture && (
             <div className="createDownload">
               <button type="button" className="btn btnPrimary" onClick={() => void download()} disabled={saving}>
                 {saving ? '💾 Saving…' : '⬇️ Download my picture'}
               </button>
               {saveError && <p role="alert" className="createMuted">{saveError}</p>}
+              <PhoneShare picture={picture} />
             </div>
           )}
           <div className="createLesson">

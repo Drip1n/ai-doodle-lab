@@ -9,6 +9,14 @@ export const IMAGE_ENDPOINT = import.meta.env.VITE_IMAGE_ENDPOINT?.trim() ?? '';
  */
 export const IMAGE_TIMEOUT_MS = 240_000;
 
+/**
+ * The temporary phone-handoff link the server may hand back with a picture.
+ * Matched strictly, because this string is turned into a URL on our own API
+ * origin: a surprising response body must not be able to point a QR code
+ * anywhere else.
+ */
+export const SHARE_PATH_PATTERN = /^\/api\/shared-image\/[A-Za-z0-9_-]{43}$/;
+
 export interface ImageRequest {
   category: { id: string; name: string };
   idea: string;
@@ -45,8 +53,36 @@ const BY_STATUS: Record<number, string> = {
   503: 'Picture making is not ready right now. Ask your workshop teacher.',
 };
 
+export interface ImageResult {
+  image: string;
+  /** Present only when the server really is holding a phone copy. */
+  sharePath?: string;
+  shareExpiresAt?: number;
+}
+
+/**
+ * The origin of our API, so a QR code can carry an absolute URL a phone can
+ * open. Derived from the configured endpoint -- an absolute
+ * `VITE_IMAGE_ENDPOINT` names the backend origin, a relative one means the
+ * backend is this same site. No hostname is ever hardcoded.
+ */
+export function apiOrigin(): string {
+  if (/^https?:\/\//i.test(IMAGE_ENDPOINT)) {
+    try { return new URL(IMAGE_ENDPOINT).origin; } catch { return ''; }
+  }
+  return typeof window === 'undefined' ? '' : window.location.origin;
+}
+
+/** The absolute phone URL for a share path, or null if it cannot be trusted. */
+export function shareUrl(sharePath: string | undefined): string | null {
+  if (!sharePath || !SHARE_PATH_PATTERN.test(sharePath)) return null;
+  const origin = apiOrigin();
+  if (!/^https?:\/\/[^/]+$/.test(origin)) return null;
+  return `${origin}${sharePath}`;
+}
+
 /** Calls our server function, never a provider directly or with a provider key. */
-export async function requestImage(request: ImageRequest, signal: AbortSignal, workshopCode?: string): Promise<string> {
+export async function requestImage(request: ImageRequest, signal: AbortSignal, workshopCode?: string): Promise<ImageResult> {
   if (!IMAGE_ENDPOINT) throw new Error('Picture making is not connected yet. Ask your workshop teacher to set it up.');
   const code = workshopCode?.trim();
   if (code && !/^[\x21-\x7E]+$/.test(code)) {
@@ -70,5 +106,13 @@ export async function requestImage(request: ImageRequest, signal: AbortSignal, w
   if (!result || typeof result !== 'object' || !('image' in result) || !isImageSource(result.image)) {
     throw new Error('The picture did not arrive correctly. Please try again.');
   }
-  return result.image;
+  const share = result as { sharePath?: unknown; shareExpiresAt?: unknown };
+  // The QR fields are an extra. Anything unexpected about them is dropped,
+  // never an error: the child still has their picture.
+  if (typeof share.sharePath === 'string' && SHARE_PATH_PATTERN.test(share.sharePath)
+    && typeof share.shareExpiresAt === 'number' && Number.isFinite(share.shareExpiresAt)
+    && share.shareExpiresAt > Date.now()) {
+    return { image: result.image, sharePath: share.sharePath, shareExpiresAt: share.shareExpiresAt };
+  }
+  return { image: result.image };
 }
