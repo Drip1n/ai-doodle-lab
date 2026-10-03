@@ -143,7 +143,9 @@ provider's own host, and the QR has to work for both.
 - An `https:` result is fetched **once**, server-side, with a 15 s timeout, an 8 MB ceiling enforced
   while reading, and a content type that must be an image — and is then checked again by magic
   bytes, so a host that mislabels its response cannot make us serve an HTML or SVG document from our
-  own origin. Only the bytes are kept; the provider's URL is never handed out as our share link.
+  own origin. A result pointing at a loopback, link-local or private literal address is refused
+  before any request is made. Only the bytes are kept; the provider's URL is never handed out as our
+  share link.
 - That is one extra image download, never a second generation. A picture is still billed once.
 
 **Sharing never endangers the picture.** If the copy fails for any reason — not an image, too big,

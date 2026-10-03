@@ -161,6 +161,21 @@ test('the share copy refuses anything that is not a bounded image', async () => 
   await assert.rejects(imageForSharing(null), ShareError);
 });
 
+test('an image result pointing inside the network is refused before any fetch', async () => {
+  const fetcher = () => { throw new Error('must not fetch an internal address'); };
+  for (const host of [
+    'localhost', '127.0.0.1', '0.0.0.0', '10.1.2.3', '192.168.1.5', '172.16.0.9', '172.31.255.1',
+    '169.254.169.254', '100.64.0.1', '[::1]', '[fd00::1]', '[fe80::1]', 'app.localhost',
+  ]) {
+    await assert.rejects(imageForSharing(`https://${host}/picture.png`, { fetcher }), ShareError, `${host} must be refused`);
+  }
+  // Ordinary public hosts, including ones that merely look similar, still work.
+  for (const host of ['images.example', '172.32.0.1', '11.0.0.1', '192.167.1.1']) {
+    const share = await imageForSharing(`https://${host}/a.png`, { fetcher: async () => imageResponse(png()) });
+    assert.equal(share.contentType, 'image/png');
+  }
+});
+
 test('a slow image host cannot hold a share open forever', async () => {
   const fetcher = (url, options) => new Promise((resolve, reject) => {
     options.signal.addEventListener('abort', () => reject(options.signal.reason));

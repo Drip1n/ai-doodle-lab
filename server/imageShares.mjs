@@ -61,6 +61,29 @@ export function shareFileName(categoryName, contentType) {
   return `ai-doodle-${safe || 'picture'}.${EXTENSIONS[contentType] ?? 'png'}`;
 }
 
+/**
+ * The provider's image host is a public one. A result pointing at loopback,
+ * a link-local address or a private range is not a picture we should fetch:
+ * the provider response is the one input to this module we do not control,
+ * and a server-side fetch can reach places a browser cannot. This blocks the
+ * obvious literal-address cases; it is not DNS-rebinding protection, which is
+ * why the bytes are still bounded, type-checked and only ever handed back
+ * behind the requester's own random token.
+ */
+function publicHost(hostname) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1' || host === '0.0.0.0') return false;
+  if (/^::ffff:/.test(host)) return publicHost(host.replace(/^::ffff:/, ''));
+  if (/^(fc|fd|fe8|fe9|fea|feb)/.test(host) && host.includes(':')) return false;
+  const parts = host.split('.');
+  if (parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part))) {
+    const [a, b] = parts.map(Number);
+    if (a === 10 || a === 127 || a === 0 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31)
+      || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127)) return false;
+  }
+  return true;
+}
+
 /** Reads a response body with a hard byte ceiling rather than trusting it. */
 async function readBounded(response, maxBytes) {
   const announced = Number(response.headers?.get?.('content-length') ?? '');
@@ -111,6 +134,7 @@ export async function imageForSharing(source, { fetcher = fetch, timeoutMs = SHA
   } else {
     const url = new URL(source);
     if (url.protocol !== 'https:') throw new ShareError('insecure image source');
+    if (!publicHost(url.hostname)) throw new ShareError('image host is not a public one');
     const response = await fetcher(source, {
       method: 'GET',
       redirect: 'follow',
