@@ -9,6 +9,9 @@ import {
   clearedCookie, createAdminAuth, parseAdmins, parseCookies, SESSION_COOKIE, sessionCookie,
 } from './admin.mjs';
 import { AcquireAbortedError, BusyError, createLimiter, createRateLimiter, QueueTimeoutError } from './queue.mjs';
+import {
+  createImageShares, imageForSharing, MAX_SHARE_ENTRIES, SHARE_PATH_PREFIX, SHARE_TTL_MS, shareFileName,
+} from './imageShares.mjs';
 
 const MAX_BODY_BYTES = 3_000_000;
 /**
@@ -49,6 +52,10 @@ export function serverConfig(env = process.env) {
     // should normally leave it on and rely on per-code limits day to day.
     globalLimit: wholeNumber(env.IMAGE_GLOBAL_REQUEST_LIMIT ?? env.IMAGE_REQUEST_LIMIT, 200, { min: 0, max: 1_000_000 }),
     codeRateLimit: wholeNumber(env.IMAGE_CODE_RATE_LIMIT, 30, { min: 0, max: 10_000 }),
+    // The phone-handoff share: how long a QR link works, and how many
+    // pictures may be held in memory at once. 0 items switches it off.
+    shareTtlMs: wholeNumber(env.IMAGE_SHARE_TTL_MS, SHARE_TTL_MS, { min: 60_000, max: 6 * 60 * 60 * 1000 }),
+    shareMaxItems: wholeNumber(env.IMAGE_SHARE_MAX_ITEMS, MAX_SHARE_ENTRIES, { min: 0, max: 500 }),
     codeRateWindowMs: wholeNumber(env.IMAGE_CODE_RATE_WINDOW_MS, 60_000, { min: 1_000, max: 3_600_000 }),
     sessionTtlMs: wholeNumber(env.ADMIN_SESSION_TTL_MS, 8 * 60 * 60 * 1000, { min: 60_000, max: 7 * 24 * 60 * 60 * 1000 }),
     maxFailures: wholeNumber(env.ADMIN_MAX_FAILURES, 5, { min: 1, max: 100 }),
@@ -92,6 +99,7 @@ export function createImageServer({ env = process.env, fetcher = fetch, store, n
   });
   const codeRate = createRateLimiter({ limit: settings.codeRateLimit, windowMs: settings.codeRateWindowMs });
   const attempts = createRateLimiter({ limit: MAX_CODE_ATTEMPTS, windowMs: CODE_ATTEMPT_WINDOW_MS });
+  const shares = createImageShares({ ttlMs: settings.shareTtlMs, maxEntries: settings.shareMaxItems });
   let globalUsed = 0;
 
   const route = async (req, res) => {
@@ -103,6 +111,20 @@ export function createImageServer({ env = process.env, fetcher = fetch, store, n
       res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
       res.end(JSON.stringify(body));
     };
+    const url = (req.url ?? '').split('?')[0];
+
+    /**
+     * The phone handoff, deliberately the one route that is not bound to our
+     * origin: a child's phone scans the QR code and opens this on a different
+     * device, so there is no workshop code and no Origin to match. The random
+     * token is the whole capability, it expires, and the route answers the
+     * same generic 404 for anything it does not hold. No CORS header is set,
+     * so another site's JavaScript still cannot read the bytes.
+     */
+    if (url.startsWith(SHARE_PATH_PREFIX) && req.method === 'GET') {
+      return sendSharedImage(url.slice(SHARE_PATH_PREFIX.length), res, reply);
+    }
+
     const origin = req.headers.origin;
     if (origin && origin !== settings.origin) return reply(403, { error: 'This website is not allowed.' });
     if (origin === settings.origin) {
@@ -112,8 +134,8 @@ export function createImageServer({ env = process.env, fetcher = fetch, store, n
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Workshop-Code');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     }
-    const url = (req.url ?? '').split('?')[0];
     if (req.method === 'OPTIONS' && url.startsWith('/api/')) { res.writeHead(204); return res.end(); }
+
 
     /** The address used for lockout counting. See TRUST_PROXY in the docs. */
     const clientIp = () => {
@@ -248,6 +270,41 @@ export function createImageServer({ env = process.env, fetcher = fetch, store, n
     return reply(404, { error: 'Not found' });
   }
 
+  function sendSharedImage(token, res, reply) {
+    const entry = shares.get(token, now());
+    // Unknown, malformed and expired are one answer, and it is the same one
+    // an unknown path gets.
+    if (!entry) return reply(404, { error: 'Not found' });
+    if (res.writableEnded || res.destroyed) return;
+    res.writeHead(200, {
+      'Content-Type': entry.contentType,
+      'Content-Length': entry.bytes.length,
+      // `inline` so a scanned link shows the picture; the filename is what
+      // the phone saves it as.
+      'Content-Disposition': `inline; filename="${entry.fileName}"`,
+    });
+    res.end(entry.bytes);
+  }
+
+  /**
+   * The share metadata for a picture that has already been generated, or
+   * nothing at all. Sharing is an extra: a picture that cannot be copied for
+   * the phone is still a picture the child made, so every failure here is
+   * swallowed and the generation response goes out without the QR fields.
+   */
+  async function shareFor(image, categoryName, aborted) {
+    if (settings.shareMaxItems === 0 || aborted) return {};
+    try {
+      const { bytes, contentType } = await imageForSharing(image, { fetcher });
+      const { path, expiresAt } = shares.put({ bytes, contentType, fileName: shareFileName(categoryName, contentType) }, now());
+      return { sharePath: path, shareExpiresAt: expiresAt };
+    } catch {
+      // Never logged: the only interesting part of a failure here would be
+      // the image or the token.
+      return {};
+    }
+  }
+
   async function handleGenerate(req, res, reply, clientIp) {
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST, OPTIONS'); return reply(405, { error: 'Use POST' }); }
     const supplied = req.headers['x-workshop-code'];
@@ -304,7 +361,12 @@ export function createImageServer({ env = process.env, fetcher = fetch, store, n
       // The provider clock starts here, so time spent queueing never eats
       // into the generation timeout.
       providerTimer = setTimeout(() => controller.abort(), settings.providerTimeoutMs);
-      reply(200, await generate(input, settings.provider, fetcher, controller.signal));
+      const result = await generate(input, settings.provider, fetcher, controller.signal);
+      // The provider is done; its clock must not still be able to abort the
+      // share copy that follows.
+      clearTimeout(providerTimer);
+      providerTimer = null;
+      reply(200, { ...result, ...await shareFor(result.image, input.category.name, controller.signal.aborted) });
     } catch (error) {
       if (error instanceof BusyError) {
         return reply(429, { code: 'busy', error: 'Lots of pictures are being made right now. Wait a moment and try again.' });
@@ -338,7 +400,7 @@ export function createImageServer({ env = process.env, fetcher = fetch, store, n
     return new HttpError(state === 'unknown' ? 401 : 403, messages[state] ?? messages.unknown, state);
   }
 
-  return Object.assign(server, { limiter, auth, codeStore, settings });
+  return Object.assign(server, { limiter, auth, codeStore, settings, shares });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
