@@ -1,11 +1,19 @@
 # Picture making: Demo, Live, and the workshop admin panel
 
-Demo remains the default and needs only `npm run dev`. It previews an idea and sends no
-image-generation requests.
+This is the detailed reference for the **Let AI create** path: how workshop codes work, what the
+server validates, what it limits, what it does and does not store, and what has to be configured
+outside this repository before a class uses it.
 
-Live mode adds a small Node server (`server/`) that holds the provider credentials, hands out
-workshop codes, and queues generations so a class of fifteen does not become fifteen simultaneous
-provider calls.
+Two modes:
+
+- **Demo** is the default for a checkout and needs only `npm run dev`. It previews the idea a child
+  assembled and sends no image-generation request at all.
+- **Live** adds the small Node server in `server/`, which holds the provider credentials, hands out
+  workshop codes, and queues generations so a class of fifteen does not become fifteen simultaneous
+  provider calls.
+
+Live mode is deployed and running in production. See [Deployment](#deployment) below and
+[deployment.md](deployment.md) for the topology.
 
 ## Local Live setup
 
@@ -42,8 +50,8 @@ Use Node.js 22.9+ (Node.js 24 recommended).
 7. Add examples in Teach, open Challenge → Let AI create, enter the workshop code, then create a
    picture.
 
-The key and the admin password have deliberately not been created or filled in. No provider
-requests were made during development.
+The repository contains no key and no admin password, and none of the example files hold a real
+value. Production credentials exist only as runtime environment variables on the backend host.
 
 ## Workshop codes
 
@@ -205,8 +213,12 @@ reference drawings.
 
 ## Model compatibility — verify before enabling paid calls
 
+Production runs `IMAGE_OPERATION=edits` against `gpt-image-2`, so that combination is known to work
+through a Portkey `/images/edits` route. Everything else here still applies to any other
+configuration.
+
 The adapters implement request/response shapes, not guaranteed availability of specific models.
-Model names must be confirmed in your Portkey workspace; they differ by provider route. Do not
+Model names must be confirmed in your own Portkey workspace; they differ by provider route. Do not
 assume that a Google-prefixed name implies a direct Gemini connection.
 
 - `edits` sends PNG references as multipart `image` (one reference) or `image[]` (multiple), plus
@@ -220,62 +232,79 @@ assume that a Google-prefixed name implies a direct Gemini connection.
 Official references: <https://portkey.ai/docs/api-reference/inference-api/images/create-image-edit>
 and <https://portkey.ai/docs/api-reference/inference-api/chat-completions>
 
-## Deployment reality check
+## Deployment
 
-Read this before promising Live mode at a workshop. **No hosting provider setting was created,
-inspected or changed while this was built.** Everything below is what the repository itself shows.
+Live mode is deployed and running in production. The detail below is the summary; the full topology,
+environment-variable categories and redeploy considerations live in
+[deployment.md](deployment.md).
 
-### A. What deploys automatically today
+### What runs where
 
-Only the static frontend. The repository contains no deployment configuration at all — no
-`wrangler.toml`, no `functions/` directory, no `_worker.js`, no `_routes.json`, no Dockerfile, and
-no deploy workflow (`.github/workflows/ci.yml` runs tests and `npm run build`, and publishes
-nothing). The README states that Cloudflare deploys `main`; that integration is configured in the
-Cloudflare dashboard, outside this repository, and cannot be verified from here. What it can deploy
-is `npm run build` → `dist/`.
+| Piece | Deployment |
+| --- | --- |
+| Frontend (`dist/`) | Static bundle on Cloudflare, `fontys-ai-lab.milansmiesko.nl` |
+| Backend (`server/index.mjs`) | `Dockerfile.server`, one container on a VPS managed by Coolify, behind a TLS reverse proxy at `fontys-ai-doodle-api.milansmiesko.nl` |
+| Code store | A persistent volume mounted at `/app/data` |
+| Generation | Portkey, `IMAGE_OPERATION=edits` → `/images/edits`, model `gpt-image-2` |
 
-### B. What must run the Node backend
+Production runs `IMAGE_QUALITY=medium` and `IMAGE_SIZE=1024x1024`.
 
-`server/index.mjs` is a portable Node HTTP service — a long-running process, **not** a serverless
-function and not part of the static build. It needs an always-on Node 22.9+ host with a writable
-disk for the code store: a small VPS, a container, or any Node app host. Start it with
-`npm run server` (or `node --env-file-if-exists=.env.server.local server/index.mjs`) under a process
-manager, and reverse-proxy `/api/*` to it over https. A single instance only: the store is one
-local file, and the queue, session and limit counters are per process.
+`POST /api/generate-image` and the `/api/admin/*` routes exist in production. `GET /api/health`
+answers `configured: true` once a provider key, a model, at least one admin and a readable store are
+all present.
 
-### C. Server-side environment variables
+Neither Cloudflare nor Coolify is required by the application. The frontend is a plain static bundle
+with a single entry point — no edge functions, no `_worker.js`, no `_routes.json`, no framework
+adapter — so any static host serves it. The backend is a portable Node HTTP service, so any Docker
+host runs it. Both are current deployment choices, not architectural dependencies.
+
+### What the backend needs
+
+`server/index.mjs` is a long-running process, **not** a serverless function and not part of the
+static build. It needs an always-on Node 22.9+ host with a writable disk for the code store.
+`Dockerfile.server` provides exactly that: `node:24-alpine` plus `server/`, no `npm ci` — every
+module under `server/` imports only `node:` built-ins, so the backend has no package to install.
+
+Run **one instance only**. The store is one local file, and the queue, sessions and limit counters
+are per process.
+
+### Server-side environment variables
 
 Required for Live mode: `APP_ORIGIN`, `PORTKEY_API_KEY`, `IMAGE_MODEL`, `IMAGE_OPERATION`, one of
 `PORTKEY_CONFIG_ID` / `PORTKEY_VIRTUAL_KEY`, and `ADMIN_USERS_JSON`. Strongly recommended:
-`WORKSHOP_STORE_PATH` (a path that survives redeploys), `TRUST_PROXY=1` behind a proxy, and the
+`WORKSHOP_STORE_PATH` on a path that survives redeploys, `TRUST_PROXY=1` behind a proxy, and the
 concurrency/limit variables. Optional: `PORT`, `HOST`, `PORTKEY_BASE_URL`, `PORTKEY_PROVIDER`,
-`WORKSHOP_CODE_PREFIX`, `ADMIN_COOKIE_SECURE`, `ADMIN_SESSION_TTL_MS`, `ADMIN_MAX_FAILURES`,
-`ADMIN_LOCKOUT_MS`. `.env.server.example` lists every one with a safe placeholder. No session secret
-is needed: tokens are random and held server-side.
+`IMAGE_QUALITY`, `IMAGE_SIZE`, `WORKSHOP_CODE_PREFIX`, `ADMIN_COOKIE_SECURE`,
+`ADMIN_SESSION_TTL_MS`, `ADMIN_MAX_FAILURES`, `ADMIN_LOCKOUT_MS`. `.env.server.example` lists every
+one with a safe placeholder. No session secret is needed: tokens are random and held server-side.
 
-### D. Can the current production setup serve `/api/generate-image`?
+### Cross-origin versus same-origin
 
-As the repository stands, **no.** There is nothing in it that would make `/api/generate-image` exist
-on the deployed site. A static host serving `dist/` has no such route, and `VITE_IMAGE_ENDPOINT` is
-empty in `.env.example`, so a production build defaults to Demo mode and the app says picture making
-is not connected. Demo mode is unaffected by any of this and keeps working.
+Production currently serves the frontend and the backend from **different** hostnames, which is why
+`VITE_IMAGE_ENDPOINT` is the backend's absolute https URL and `APP_ORIGIN` is the exact frontend
+origin. The admin base is derived from `VITE_IMAGE_ENDPOINT` automatically, so `VITE_ADMIN_ENDPOINT`
+is not set.
 
-### E. The minimum manual step still required
+Same-origin `/api/*` remains the smaller configuration: no cross-origin cookie handling, a relative
+`VITE_IMAGE_ENDPOINT=/api/generate-image`, and an `APP_ORIGIN` that lines up with the site by
+construction. Moving to it is the
+point of the portable Docker Compose deployment on the
+[roadmap](../README.md#roadmap).
+
+### Deploying it yourself
 
 Four things, none of them in this repository:
 
-1. Run `server/index.mjs` somewhere with the environment variables from (C).
-2. Expose it over https, either as `/api/*` on the same origin as the site (so cookies and
-   `APP_ORIGIN` line up with no extra configuration) or on its own https origin.
-3. Set `VITE_IMAGE_MODE=live` and `VITE_IMAGE_ENDPOINT` in the frontend build, and `APP_ORIGIN` on
-   the server to the exact site origin.
+1. Run the backend container with the environment variables above and a volume mounted at
+   `/app/data`. Without the volume, every redeploy voids every workshop code and usage counter.
+2. Expose it over https, either as `/api/*` on the site's own origin or on its own https origin.
+3. Set `VITE_IMAGE_MODE=live` and `VITE_IMAGE_ENDPOINT` in the frontend **build** — they are
+   compile-time constants, so changing them needs a rebuild — and `APP_ORIGIN` on the server to the
+   exact site origin.
 4. Create one admin with `npm run admin:hash-password` and put the result in the server's
    environment.
 
-Same-origin `/api/*` is the smallest option: it needs no `VITE_ADMIN_ENDPOINT`, no cross-origin
-cookie handling, and `VITE_IMAGE_ENDPOINT=/api/generate-image`. If the server lives on its own
-origin, set `APP_ORIGIN` to the site and `VITE_IMAGE_ENDPOINT` to the server's absolute https URL;
-the admin base is then derived from it automatically.
+Demo mode is unaffected by all of this and keeps working with no server, no key and no code.
 
 ## Checks
 
