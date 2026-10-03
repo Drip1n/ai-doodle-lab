@@ -28,7 +28,7 @@ jobs:
       # for no extra signal in CI. The WebKit project stays available locally
       # via `npm run test:e2e:canvas`.
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e -- --project=canvas-desktop-chromium --project=canvas-mobile-chromium --project=app-mobile-chromium
+      - run: npm run test:e2e -- --project=canvas-desktop-chromium --project=canvas-mobile-chromium --project=app-mobile-chromium --project=app-create-mobile-chromium
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
