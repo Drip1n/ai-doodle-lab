@@ -25,7 +25,7 @@ export const INPUT = { category: { id: 'cat', name: 'Cat' }, idea: 'in a hat', r
 export const TEST_PASSWORD = 'teacher-password-123';
 export const TEST_EMAIL = 'teacher@fontys.nl';
 
-export async function harness({ env = {}, fetcher, password = TEST_PASSWORD } = {}) {
+export async function harness({ env = {}, fetcher, password = TEST_PASSWORD, now } = {}) {
   const { hashPassword } = await import('./admin.mjs');
   const directory = await mkdtemp(join(tmpdir(), 'workshop-codes-'));
   const storeFile = join(directory, 'codes.json');
@@ -40,6 +40,7 @@ export async function harness({ env = {}, fetcher, password = TEST_PASSWORD } = 
       ...env,
     },
     fetcher: fetcher ?? (async () => ({ ok: true, json: async () => ({ data: [{ b64_json: 'YQ==' }] }) })),
+    ...(now ? { now } : {}),
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;

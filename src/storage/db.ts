@@ -1,4 +1,4 @@
-import type { AiDrawStats, ChallengeStats, Example, LearningClass } from '../types';
+import type { AiDrawStats, ChallengeStats, Example, GeneratedPicture, LearningClass } from '../types';
 
 /**
  * Tiny IndexedDB wrapper. Everything stays on this device -- there is no
@@ -145,6 +145,18 @@ export const saveMemoryStats = (stats: ChallengeStats) => writeMeta('memoryStats
 
 export const loadAiDrawStats = () => readMeta<AiDrawStats>('aiDrawStats');
 export const saveAiDrawStats = (stats: AiDrawStats) => writeMeta('aiDrawStats', stats);
+
+/**
+ * The latest generated picture. Only one row ever exists: this is the child's
+ * most recent creation, not a history. It is a few hundred kilobytes of
+ * base64, which is the same order as the example thumbnails already stored
+ * beside it.
+ */
+export const loadLatestCreation = () => readMeta<GeneratedPicture>('latestCreation');
+export const saveLatestCreation = (picture: GeneratedPicture) => writeMeta('latestCreation', picture);
+export async function clearLatestCreation(): Promise<void> {
+  await run(META, 'readwrite', (store) => store.delete('latestCreation'));
+}
 
 export async function clearMeta(): Promise<void> {
   await run(META, 'readwrite', (store) => store.clear());

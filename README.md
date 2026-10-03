@@ -78,10 +78,17 @@ Guess what it is before it finishes. This is the counterpart to You Draw: *gener
 
 Pick a category you have already taught. Up to four of your own drawings become the clues. Choose a
 look, a world and a style, and a hosted image model makes a picture from them, which you can
-download as a PNG.
+download as a PNG — or **scan a QR code to save it on your own phone**, which is what a booth
+needs when the machine making the picture is not the child's.
+
+While it is being made, the panel shows an obvious "Creating your picture…" state rather than a
+still screen, and a picture already on screen stays there until the new one really arrives. The
+latest picture belongs to the session: wandering off to another challenge, or to Learn, and coming
+back does not lose it.
 
 This is the one place where something a child made leaves their device, and the app says so on
-screen before they press the button. It needs a workshop code from the teacher.
+screen before they press the button. It needs a workshop code from the teacher — the field hides it
+behind dots by default, with a **Show** button for checking what was typed.
 
 There is a fourth Challenge tab, **Memory** — can you remember what the AI learned? — which makes a
 good filler while others are waiting for a picture.
@@ -170,7 +177,7 @@ This split is the technical centre of the project and the educational point of i
 | Needs network | Only to download model weights | Yes, per picture |
 | Costs money | No | Yes, per picture |
 | Access control | None needed | Teacher-issued workshop code |
-| Stored anywhere server-side | No | **No** — processed transiently, never written to disk |
+| Stored anywhere server-side | No | **Never on disk.** One copy of the finished picture is held in backend memory for ~30 minutes behind a random link, so a phone can scan it |
 
 Two clarifications that are easy to get wrong in either direction:
 
@@ -180,7 +187,9 @@ Two clarifications that are easy to get wrong in either direction:
   around the app working without network.
 - **"Hosted" does not mean "stored."** The backend holds a student's references only for the life of
   the request. No drawing, prompt or generated image is ever written to disk; the only thing
-  persisted server-side is workshop-code metadata.
+  persisted server-side is workshop-code metadata. The QR handoff is the one deliberate exception
+  to "transient": the finished picture is kept **in memory only**, behind a 256-bit random token,
+  for about half an hour, and a restart drops every such link.
 
 ## Teacher controls
 
@@ -213,21 +222,30 @@ Each class gets its own code with its own lifetime and budget — there is no si
   queue is re-validated after it leaves and still refused.
 
 📖 Codes, limits and auth in detail: **[docs/image-generation.md](docs/image-generation.md)** ·
-Running a session: **[docs/workshop-runbook.md](docs/workshop-runbook.md)**
+Running a session: **[docs/workshop-runbook.md](docs/workshop-runbook.md)** ·
+What the first real workshop changed: **[docs/workshop-feedback.md](docs/workshop-feedback.md)**
 
 ## Security, privacy and safety
 
 **Privacy.** No account, no analytics, no tracking.
 
-- Categories, examples, thumbnails and session scores live in the browser's IndexedDB. **Reset AI**
-  clears them.
+- Categories, examples, thumbnails, session scores and the latest generated picture live in the
+  browser's IndexedDB. **Reset AI** clears them. Only the most recent picture is kept — there is no
+  gallery — and only when it is inline image data; a picture the provider returned as a link is
+  kept for the session but never stored, because its lifetime is not ours to promise.
 - Teach, You Draw and AI Draws send nothing. "Upload image" reads a file into the page; it does not
   upload it anywhere.
 - **Let AI Create is the exception.** Pressing Create sends the category name, the idea string the
   child assembled from three fixed option groups, and up to four PNG thumbnails of their own
   examples, through our backend to the image provider. The app states this on screen first.
-- The backend persists **no** drawings, prompts or generated images. The only thing it writes to
-  disk is workshop-code metadata: labels, hashes, expiry, usage counters.
+- The backend writes **no** drawings, prompts or generated images to disk. The only thing it writes
+  is workshop-code metadata: labels, hashes, expiry, usage counters.
+- For the QR handoff, one copy of a finished picture is held in backend **memory**, behind a
+  cryptographically random token that encodes nothing about the child or their code, for about 30
+  minutes. The table is bounded (40 pictures, 64 MB), expired and oldest entries are evicted, and a
+  restart drops all of them. `GET /api/shared-image/<token>` answers one generic `404` for anything
+  unknown, malformed or expired. It takes no workshop code by design — the phone scanning it does
+  not have one — so the random token is the whole capability.
 - Nothing logs a provider key, a password, a full workshop code or a student image. There is a test
   that asserts it.
 
@@ -265,16 +283,17 @@ npm run build        # tsc -b + production build
 npm run test:e2e     # Playwright — real browser input
 ```
 
-At production release [`d9ba1e0`](https://github.com/Drip1n/ai-doodle-lab/commit/d9ba1e0), on
-Node 24:
+At the post-workshop iteration
+[`997691a`](https://github.com/Drip1n/ai-doodle-lab/commit/997691a), on Node 26 (production runs
+Node 24):
 
 | Check | Result |
 | --- | --- |
 | `npm run lint` | clean |
-| `npm test` | **115 passed** (10 files) |
-| `npm run test:server` | **88 passed** |
+| `npm test` | **143 passed** (12 files) |
+| `npm run test:server` | **109 passed** |
 | `npm run build` | passed |
-| `npm run test:e2e` | **37 passed, 11 skipped** |
+| `npm run test:e2e` | **41 passed, 11 skipped** |
 
 The 11 skips are deliberate, not failures: CDP touch injection is Chromium-only, so the touch
 describe block is skipped on the WebKit project.
@@ -282,16 +301,19 @@ describe block is skipped on the WebKit project.
 What each one protects:
 
 - **`npm test`** — the image pipeline, loading stages, dataset helpers, the generation client's
-  error-wording map and source validation, the download filename and the two source shapes, the
-  Sketch-RNN model cache's LRU and disposal, stroke maths, the admin API client, and the admin and
-  Let AI Create components.
+  error-wording map, source validation and share-URL derivation, what the latest creation may
+  promise across a reload, the lab's own creation lifecycle, the download filename and the two
+  source shapes, the Sketch-RNN model cache's LRU and disposal, stroke maths, the admin API client,
+  and the admin and Let AI Create components — the waiting state, the QR section and the
+  workshop-code toggle included.
 - **`npm run test:server`** — workshop-code validity and revocation, randomness and
   plaintext-never-stored, persistence across a restart, a malformed store failing closed, admin
   sign-in, lockout, session expiry and logout, code creation/listing/revocation, four-at-a-time
   concurrency with queue overflow and abort handling, usage counting under concurrency, the
-  generation guards, and that nothing sensitive is logged. **None of it uses a real API key or a
-  real password.**
-- **`npm run test:e2e`** — three suites:
+  generation guards, the temporary phone-share store (token entropy, expiry, eviction, byte and
+  item ceilings, one generic 404, nothing on disk) and that nothing sensitive is logged. **None of
+  it uses a real API key or a real password.**
+- **`npm run test:e2e`** — four suites:
   - `drawing-canvas.spec.ts`, the pointer-lifecycle regression net, with real touch and mouse input
     on desktop Chromium, mobile Chromium and mobile WebKit. Needs no network; it mounts the canvas
     on its own dev-only harness page (`e2e/harness/`).
@@ -300,6 +322,9 @@ What each one protects:
   - `admin.spec.ts`, the teacher's path end to end: open the panel, sign in, hand out a code once,
     see it masked, revoke it, sign out. The Node server is mocked at the network layer, so it needs
     no provider key.
+  - `create.spec.ts`, Let AI Create in Live mode against its own Vite server: the code toggle, the
+    waiting state, the QR code, a picture surviving a walk to another challenge and back, and the
+    download. The Node server is mocked, so it needs no provider key and bills nothing.
 
 Run just the fast ones with `npm run test:e2e:canvas`; browsers need installing once with
 `npx playwright install --with-deps`.
@@ -531,9 +556,11 @@ Possibilities, not existing features:
 src/
   admin/           adminApi.ts — teacher routes, no credential held client-side
   components/      UI: canvas, class cards, challenges, CreateChallenge (Let AI Create),
+                   CreatingPicture (the waiting state), PhoneShare (the QR handoff),
                    AdminPanel, learn cards, stepper, loader, dialogs
   generative/      sketchGenerator.ts (Sketch-RNN runtime), modelCache.ts (bounded LRU),
-                   imageApi.ts (our API client + child-facing wording),
+                   imageApi.ts (our API client + child-facing wording + share URL),
+                   latestCreation.ts (what survives a reload, and what honestly cannot),
                    downloadImage.ts (PNG save), supportedModels.ts, strokeUtils.ts
   hooks/           useAiLab.ts — all app state and actions
   lib/             dataset.ts — dataset helpers
@@ -550,12 +577,14 @@ server/            the Node API — every module imports only node: built-ins
   store.mjs        atomic JSON store, serialised reads and writes
   admin.mjs        scrypt verification, sessions, cookies
   queue.mjs        concurrency limiter, bounded FIFO queue, per-code rate limiter
+  imageShares.mjs  the temporary in-memory phone handoff: bounded, expiring, never on disk
   *.test.mjs       node --test suites
 
 e2e/
   drawing-canvas.spec.ts   pointer-lifecycle regressions (touch, mouse, pen)
   workshop.spec.ts         workshop-critical paths against the real app
   admin.spec.ts            the teacher's path, server mocked at the network layer
+  create.spec.ts           Let AI Create in Live mode: waiting state, QR, persistence
   harness/                 dev-only page that mounts DrawingCanvas on its own
   support/                 touch injection and ink-measuring helpers
 
@@ -615,7 +644,7 @@ Keep `main` always deployable and never force-push it.
 **Frontend** · React 19 · TypeScript 6 · Vite 8 · TensorFlow.js 4.22 ·
 MobileNet (`@tensorflow-models/mobilenet`) · KNN Classifier
 (`@tensorflow-models/knn-classifier`) · Sketch-RNN (pretrained Magenta checkpoints, loaded
-directly) · IndexedDB
+directly) · IndexedDB · `qrcode.react` (QR drawn in the browser, no QR web service)
 
 **Backend** · Node 22.9+ (24 in production) · `node:http`, no runtime dependencies ·
 `node:crypto` for scrypt, salted hashes and constant-time comparison · atomic JSON file store

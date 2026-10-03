@@ -7,6 +7,7 @@ import {
   type ClassId,
   type Example,
   type ExampleSource,
+  type GeneratedPicture,
   type LearningClass,
   type ModelStatus,
   type Prediction,
@@ -26,6 +27,7 @@ import {
 import * as ml from '../ml/classifier';
 import { FIRST_PROGRESS, progressFor } from '../ml/loadStages';
 import { toThumbnail } from '../ml/imageProcessing';
+import { isDurable, restoreCreation, withoutExpiredShare } from '../generative/latestCreation';
 import * as db from '../storage/db';
 
 const MIN_EXAMPLES_PER_CLASS = 2;
@@ -47,6 +49,12 @@ export function useAiLab() {
   const [memoryStats, setMemoryStats] = useState<ChallengeStats>(EMPTY_STATS);
   const [aiDrawStats, setAiDrawStats] = useState<AiDrawStats>(EMPTY_AI_DRAW_STATS);
   const [storageAvailable, setStorageAvailable] = useState(true);
+  /**
+   * The newest picture the image-making AI produced, if any. It lives here
+   * rather than in the Create panel so switching challenge tabs or stages
+   * cannot throw a child's picture away.
+   */
+  const [latestCreation, setLatestCreation] = useState<GeneratedPicture | null>(null);
 
   /**
    * One boot at a time. Two concurrent boots each find no saved categories
@@ -65,13 +73,14 @@ export function useAiLab() {
       );
       setModelStatus({ state: 'loading', progress: progressFor('workshop') });
 
-      const [storedExamples, storedClasses, storedStats, storedMemoryStats, storedAiDrawStats] =
+      const [storedExamples, storedClasses, storedStats, storedMemoryStats, storedAiDrawStats, storedCreation] =
         await Promise.all([
           db.loadExamples(),
           db.loadClasses(),
           db.loadStats(),
           db.loadMemoryStats(),
           db.loadAiDrawStats(),
+          db.loadLatestCreation(),
         ]);
 
       let activeClasses = storedClasses;
@@ -89,6 +98,13 @@ export function useAiLab() {
       // Replay the saved embeddings so the AI remembers last session.
       ml.rebuildFrom(kept);
       setExamples(kept);
+
+      // A stored picture is re-validated rather than trusted, and a stale
+      // phone link is dropped without taking the picture with it.
+      const restored = restoreCreation(storedCreation);
+      setLatestCreation(restored);
+      if (storedCreation && !restored) void db.clearLatestCreation();
+      else if (restored && restored !== storedCreation) void db.saveLatestCreation(restored);
 
       if (storedStats) setStats(storedStats);
       if (storedMemoryStats) setMemoryStats(storedMemoryStats);
@@ -256,6 +272,23 @@ export function useAiLab() {
     [classes, examples],
   );
 
+  /**
+   * Replaces the latest creation. Only a picture whose bytes we hold is
+   * written to storage; a provider URL is kept for this session only, because
+   * promising a reload would mean promising someone else's host.
+   */
+  const rememberCreation = useCallback((picture: Omit<GeneratedPicture, 'createdAt'>) => {
+    const kept = withoutExpiredShare({ ...picture, createdAt: Date.now() });
+    setLatestCreation(kept);
+    if (isDurable(kept)) void db.saveLatestCreation(kept);
+    else void db.clearLatestCreation();
+  }, []);
+
+  const forgetCreation = useCallback(() => {
+    setLatestCreation(null);
+    void db.clearLatestCreation();
+  }, []);
+
   const pickRandomExample = useCallback((): Example | null => {
     if (examples.length === 0) return null;
     return examples[Math.floor(Math.random() * examples.length)];
@@ -269,6 +302,7 @@ export function useAiLab() {
     setStats(EMPTY_STATS);
     setMemoryStats(EMPTY_STATS);
     setAiDrawStats(EMPTY_AI_DRAW_STATS);
+    setLatestCreation(null);
     // Order matters, and callers must await this. Clearing memory alone made
     // the screen look reset while the examples were still on disk, so a
     // reload in that window handed the next child the previous one's
@@ -291,6 +325,7 @@ export function useAiLab() {
     stats,
     memoryStats,
     aiDrawStats,
+    latestCreation,
     trainedClasses,
     readyForChallenge,
     minExamplesPerClass: MIN_EXAMPLES_PER_CLASS,
@@ -308,6 +343,8 @@ export function useAiLab() {
     addClass,
     deleteClass,
     pickRandomExample,
+    rememberCreation,
+    forgetCreation,
     reset,
   };
 }

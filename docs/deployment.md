@@ -147,6 +147,11 @@ off by default.
 `IMAGE_PROVIDER_TIMEOUT_MS`, `IMAGE_GLOBAL_REQUEST_LIMIT`, `IMAGE_CODE_RATE_LIMIT`,
 `IMAGE_CODE_RATE_WINDOW_MS`.
 
+**Phone handoff (QR):** `IMAGE_SHARE_TTL_MS` (default 30 minutes) and `IMAGE_SHARE_MAX_ITEMS`
+(default 40; `0` switches sharing off). Both are optional. The shared pictures are held in process
+memory only — never on the volume — bounded at 8 MB each and 64 MB in total, and are dropped on
+restart.
+
 **Generation parameters:** `IMAGE_QUALITY` and `IMAGE_SIZE`, each validated against a fixed
 allow-list at boot. A value outside it stops the server with a clear message rather than reaching
 the provider and being silently reinterpreted or billed at an unintended size.
@@ -186,6 +191,10 @@ Redeploying replaces the container.
   during one.
 - **Counters reset.** `IMAGE_GLOBAL_REQUEST_LIMIT` and the per-code rate-limit windows are in-memory
   and start fresh. Per-code *usage* counters are on disk and do not.
+- **QR phone links do not survive.** Every `/api/shared-image/<token>` handed out so far stops
+  working, because the pictures are held in memory by design. Children keep their pictures (they are
+  on the device and still downloadable); only the phone links die. One more reason not to redeploy
+  during a class.
 - **Check health afterwards.** `configured: true` before the next class, not during it.
 
 Rolling back is redeploying the previous image. Because the store validates every entry on load and
@@ -207,6 +216,7 @@ is the first place to look.
 | Workshop-code store | One local JSON file | Each replica has its own. A code minted on one is unknown to the other; usage counters diverge. |
 | Admin sessions | Memory | A teacher signed in on one replica is signed out on the other. |
 | Queue, global ceiling, rate-limit windows | Memory | Effective concurrency and ceilings multiply by the replica count. |
+| QR phone shares | Memory | A link minted on one replica 404s on the other, so scanning it would fail roughly half the time. |
 
 This is deliberate. The alternative on the morning of a workshop is standing up PostgreSQL or Redis
 and a shared session store, and the workshop does not need it: one small Node process serves a class

@@ -72,6 +72,30 @@ export interface Example {
   source: ExampleSource;
 }
 
+/**
+ * The most recent picture the image-making AI actually produced.
+ *
+ * It belongs to the workshop session, not to the Create panel: a child who
+ * wanders off to Memory and comes back must find their picture still there.
+ * Only the latest one is kept -- this is deliberately not a gallery.
+ *
+ * `prompt`, `categoryId` and `categoryName` are a snapshot taken when the
+ * picture arrived, so changing a look or a world afterwards can never leave
+ * an older image sitting under a caption that no longer describes it.
+ */
+export interface GeneratedPicture {
+  /** A `data:` image, or an `https:` URL the provider returned. */
+  image: string;
+  categoryId: ClassId;
+  categoryName: string;
+  prompt: string;
+  createdAt: number;
+  /** Where the temporary phone copy lives on our API, when there is one. */
+  sharePath?: string;
+  /** Epoch milliseconds after which that phone link is gone. */
+  shareExpiresAt?: number;
+}
+
 export interface Prediction {
   classId: ClassId;
   confidences: Record<ClassId, number>;

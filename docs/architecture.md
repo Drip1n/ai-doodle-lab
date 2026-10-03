@@ -80,10 +80,12 @@ The thick arrows are the only path on which anything a student made leaves their
 | Startup | `src/ml/loadStages.ts` | Named loading stages, so a slow model download reads as progress rather than a frozen screen. |
 | Sketch generation | `src/generative/sketchGenerator.ts` | A decoder-only Sketch-RNN runtime (~250 lines) on the TensorFlow.js already in the bundle. |
 | Model memory | `src/generative/modelCache.ts` | Bounded LRU, five checkpoints, disposes tensors — a long workshop cannot grow unbounded. |
-| Generation client | `src/generative/imageApi.ts` | The only module that calls our API. Owns every message a child can see; never holds a provider key. |
+| Generation client | `src/generative/imageApi.ts` | The only module that calls our API. Owns every message a child can see; never holds a provider key. Derives the API origin for the phone link from the configured endpoint. |
+| Latest creation | `src/generative/latestCreation.ts` | What may be promised across a reload (inline image data) and what may not (a provider URL), plus the phone link's own expiry. |
 | Saving a picture | `src/generative/downloadImage.ts` | `data:` straight to an anchor, `https:` fetched to a blob first. Re-validates the source scheme. |
 | Admin client | `src/admin/adminApi.ts` | Teacher routes. Holds no credential; the session is an `HttpOnly` cookie. |
-| State | `src/hooks/useAiLab.ts` | All app state and actions in one place. |
+| Phone handoff | `src/components/PhoneShare.tsx` | The QR code, drawn locally. Shown only for a live share, replaced by an explanation once it expires. |
+| State | `src/hooks/useAiLab.ts` | All app state and actions in one place, the latest generated picture included. |
 | Persistence | `src/storage/db.ts` | IndexedDB: categories, examples, thumbnails, session scores. |
 
 ### Server (`server/`)
@@ -96,6 +98,7 @@ The thick arrows are the only path on which anything a student made leaves their
 | `store.mjs` | The atomically written JSON store, serialised through one promise chain. |
 | `admin.mjs` | Admin parsing, scrypt verification, sessions, cookies. |
 | `queue.mjs` | Concurrency limiter, FIFO queue with a bounded wait, per-code rate limiter. |
+| `imageShares.mjs` | The temporary phone handoff: bounded in-memory share table behind random expiring tokens, plus the one-off normalisation of a provider image into shareable bytes. |
 
 Every module under `server/` imports only `node:` built-ins. The backend has no dependencies to
 install, which is why `Dockerfile.server` has no `npm ci` step.
@@ -117,7 +120,9 @@ Two things that are easy to get wrong:
   Sketch-RNN category needs network the first time it is used. A browser may cache both, but
   caching is not a guarantee — do not plan a session around the app working without network.
 - "Hosted" does not mean "stored". The backend holds a student's references only for the life of the
-  request. Nothing about a student is written to disk.
+  request. Nothing about a student is written to disk. The one deliberate exception to *transient*
+  is the phone handoff, and it is memory-only: a finished picture is held for about 30 minutes
+  behind a random token so a phone can fetch it, and a restart drops every such link.
 
 ## Data flow: Let AI Create
 
@@ -146,8 +151,10 @@ sequenceDiagram
     M-->>P: Image
     P-->>A: Image
     A->>A: Validate the returned source
-    A-->>C: { image }
-    C->>C: Display, and optionally download as PNG
+    A->>A: Copy the picture into the in-memory share table (best effort, ~30 min, random token)
+    A-->>C: { image, sharePath?, shareExpiresAt? }
+    C->>C: Display, keep as the session's latest creation, offer the PNG download and the QR
+    Note over C,A: A failed share copy never fails the generation: the picture arrives without the QR fields
 ```
 
 A usage is spent at the moment a provider call is about to start, never when a request merely
@@ -179,9 +186,11 @@ memory, so a backend restart signs teachers out — codes survive it, sessions d
 | Data | Where | Survives |
 | --- | --- | --- |
 | Categories, examples, thumbnails, session scores | Browser IndexedDB | Reloads on that device. Cleared by **Reset AI**. |
+| The **latest** generated picture (one row, with its own prompt and category snapshot) | Browser IndexedDB, when it is inline image data | Reloads on that device. Cleared by **Reset AI**. A provider URL is kept for the session only, never stored. |
 | Workshop codes and usage counters | One JSON file on the backend's persistent volume | Backend restarts and redeploys, provided the volume is mounted. |
 | Admin sessions | Backend memory | Nothing. A restart ends them. |
-| Student drawings, prompts, generated images | **Nowhere server-side** | n/a — they are never written to disk. |
+| Student drawings, prompts, generated images | **Nowhere on the backend's disk** | n/a. |
+| One generated picture per phone handoff | Backend **memory**, behind a 256-bit random token | Nothing. It expires after ~30 minutes, is evicted when 40 pictures or 64 MB are exceeded, and dies with the process. |
 
 The store is one file written atomically: a temp file in the same directory, then `rename`. All
 reads and writes go through a single promise chain, so a read-modify-write from one request cannot
@@ -216,6 +225,7 @@ flowchart TB
     tb2 -->|"composed prompt + reference bytes"| tb3
     tb3 -->|"validated: source scheme, size"| tb2
     tb2 -->|"fixed wording only, never a backend message"| tb1
+    tb2 -->|"GET /api/shared-image/&lt;random token&gt;: one picture, in memory, ~30 min"| phone["4 - The child's own phone<br/>no workshop code, another device"]
 ```
 
 What each boundary enforces:
@@ -232,7 +242,14 @@ What each boundary enforces:
 3. **Provider → browser.** The returned image source is validated before it reaches an `<img>` or a
    download anchor. Error wording shown to a child comes from a fixed map in
    `src/generative/imageApi.ts`, never from a response body, so a surprising provider error cannot
-   put unexpected text on a workshop screen.
+   put unexpected text on a workshop screen. A `sharePath` is accepted only if it matches our own
+   share-route shape exactly, because that string becomes a URL in a QR code.
+4. **Server → a phone.** `GET /api/shared-image/:token` is deliberately not bound to `APP_ORIGIN`:
+   the device scanning the QR is someone else's phone and has no workshop code. What bounds it
+   instead is the token — 256 random bits, carrying nothing about the child — plus a short TTL, a
+   bounded table, a response type sniffed from the bytes, `no-store`, `nosniff`, and one generic
+   `404` for anything unknown, malformed or expired. No CORS header is set, so another site's
+   JavaScript cannot read the bytes either.
 
 Nothing logs a provider key, a password, a full workshop code or a student image. There is a test
 that asserts it.
@@ -253,3 +270,4 @@ that asserts it.
   image-generation, workshop-code and security document.
 - [Deployment](deployment.md) — the current production topology.
 - [Workshop runbook](workshop-runbook.md) — the operational checklist.
+- [Workshop feedback](workshop-feedback.md) — what children's use of the app changed, and why.

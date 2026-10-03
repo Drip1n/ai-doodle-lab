@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createImageServer, serverConfig } from './index.mjs';
@@ -705,6 +706,8 @@ test('configuration is validated at boot rather than failing mid-workshop', () =
   assert.equal(defaults.providerTimeoutMs, 90_000);
   assert.equal(defaults.globalLimit, 200);
   assert.equal(defaults.codeRateLimit, 30);
+  assert.equal(defaults.shareTtlMs, 30 * 60 * 1000, 'a phone link lasts about half an hour');
+  assert.equal(defaults.shareMaxItems, 40);
   assert.equal(defaults.provider.quality, 'medium');
   assert.equal(defaults.provider.size, '1024x1024');
   assert.equal(defaults.secureCookies, false);
@@ -719,7 +722,210 @@ test('configuration is validated at boot rather than failing mid-workshop', () =
     { ADMIN_SESSION_TTL_MS: '5' }, { ADMIN_USERS_JSON: 'not json' },
     { ADMIN_USERS_JSON: '[{"email":"a@b.c","passwordHash":"plaintext"}]' },
     { IMAGE_QUALITY: 'ultra' }, { IMAGE_SIZE: '4096x4096' },
+    { IMAGE_SHARE_TTL_MS: '1000' }, { IMAGE_SHARE_TTL_MS: '99999999' }, { IMAGE_SHARE_MAX_ITEMS: '-1' },
+    { IMAGE_SHARE_MAX_ITEMS: '5000' },
   ]) {
     assert.throws(() => serverConfig(env), Error, `must refuse ${JSON.stringify(env)}`);
+  }
+});
+
+/* ----------------------------------------------------------------------------
+ * Phone handoff: the temporary, in-memory share behind a random token.
+ * ------------------------------------------------------------------------- */
+
+/** The base64 of a real (header-only) PNG, so the share copy sniffs as one. */
+const PROVIDER_PNG = REFERENCE.split(',')[1];
+const pngProvider = async () => ({ ok: true, json: async () => ({ data: [{ b64_json: PROVIDER_PNG }] }) });
+
+test('a generated picture gets a temporary phone link that serves the real bytes', async () => {
+  const api = await harness({ fetcher: pngProvider });
+  try {
+    const { code } = await withCode(api);
+    const result = await body(await api.generate(code));
+    assert.match(result.image, /^data:image\/png;base64,/);
+    assert.match(result.sharePath, /^\/api\/shared-image\/[A-Za-z0-9_-]{43}$/);
+    assert.ok(result.shareExpiresAt > Date.now(), 'the link is live now');
+    assert.ok(result.shareExpiresAt <= Date.now() + 30 * 60 * 1000 + 1_000, 'and gone in about half an hour');
+
+    // A phone opens this with no workshop code, no cookie and no Origin.
+    const shared = await fetch(`${api.base}${result.sharePath}`);
+    assert.equal(shared.status, 200);
+    assert.equal(shared.headers.get('content-type'), 'image/png');
+    assert.equal(shared.headers.get('cache-control'), 'no-store');
+    assert.equal(shared.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(shared.headers.get('content-disposition'), 'inline; filename="ai-doodle-cat.png"');
+    // Nothing invites another origin's JavaScript to read it.
+    assert.equal(shared.headers.get('access-control-allow-origin'), null);
+    const bytes = Buffer.from(await shared.arrayBuffer());
+    assert.deepEqual(bytes, Buffer.from(PROVIDER_PNG, 'base64'));
+  } finally { await api.close(); }
+});
+
+test('the share link is bytes in memory: nothing about a picture reaches the disk', async () => {
+  const api = await harness({ fetcher: pngProvider });
+  try {
+    const { code } = await withCode(api);
+    const result = await body(await api.generate(code));
+    const token = result.sharePath.split('/').pop();
+    const directory = dirname(api.storeFile);
+    // Only the workshop-code store exists, and it holds no picture and no token.
+    assert.deepEqual(await readdir(directory), ['codes.json']);
+    const stored = await readFile(api.storeFile, 'utf8');
+    for (const secret of [token, PROVIDER_PNG, 'shared-image', 'image/png']) {
+      assert.ok(!stored.includes(secret), `the code store must not contain ${secret.slice(0, 16)}`);
+    }
+    assert.ok(JSON.parse(stored).codes.every((entry) => !('image' in entry) && !('share' in entry)));
+  } finally { await api.close(); }
+});
+
+test('an unknown, malformed or expired token all answer the same generic 404', async () => {
+  const api = await harness({ fetcher: pngProvider, env: { IMAGE_SHARE_TTL_MS: '60000' } });
+  try {
+    const { code } = await withCode(api);
+    const { sharePath } = await body(await api.generate(code));
+    const live = await fetch(`${api.base}${sharePath}`);
+    assert.equal(live.status, 200);
+
+    const answers = [];
+    for (const path of [
+      '/api/shared-image/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      '/api/shared-image/short',
+      '/api/shared-image/',
+      '/api/shared-image/%2e%2e%2f%2e%2e%2fapi%2fhealth',
+      '/api/nothing-here',
+    ]) {
+      const response = await fetch(`${api.base}${path}`);
+      answers.push([response.status, await response.text()]);
+    }
+    for (const [status, text] of answers) {
+      assert.equal(status, 404);
+      assert.equal(text, JSON.stringify({ error: 'Not found' }), 'nothing distinguishes the reasons');
+    }
+  } finally { await api.close(); }
+});
+
+test('a share link really stops working once its own TTL has passed', async () => {
+  let clock = 1_000_000;
+  const api = await harness({ fetcher: pngProvider, env: { IMAGE_SHARE_TTL_MS: '60000' }, now: () => clock });
+  try {
+    const { code } = await withCode(api);
+    const { sharePath, shareExpiresAt } = await body(await api.generate(code));
+    assert.equal(shareExpiresAt, 1_060_000);
+    assert.equal((await fetch(`${api.base}${sharePath}`)).status, 200);
+    clock = shareExpiresAt;
+    const expired = await fetch(`${api.base}${sharePath}`);
+    assert.equal(expired.status, 404);
+    // Identical to an unknown token: a phone learns nothing about what existed.
+    assert.equal(await expired.text(), JSON.stringify({ error: 'Not found' }));
+    assert.deepEqual(api.server.shares.stats(clock), { count: 0, bytes: 0 });
+  } finally { await api.close(); }
+});
+
+test('an https provider image is copied once for sharing, never generated twice', async () => {
+  const calls = [];
+  const api = await harness({
+    fetcher: async (url) => {
+      calls.push(url);
+      if (url.includes('images.example')) {
+        return {
+          ok: true,
+          headers: new Headers({ 'content-type': 'image/png' }),
+          body: new Blob([Buffer.from(PROVIDER_PNG, 'base64')]).stream(),
+        };
+      }
+      return { ok: true, json: async () => ({ data: [{ url: 'https://images.example/picture.png' }] }) };
+    },
+  });
+  try {
+    const { code } = await withCode(api);
+    const result = await body(await api.generate(code));
+    assert.equal(result.image, 'https://images.example/picture.png');
+    assert.match(result.sharePath, /^\/api\/shared-image\//);
+    // One generation, one plain image download. Never two generations.
+    assert.equal(calls.filter((url) => url.includes('/images/edits')).length, 1);
+    assert.deepEqual(calls.filter((url) => url.includes('images.example')), ['https://images.example/picture.png']);
+
+    // The share link is ours, not the provider's.
+    const shared = await fetch(`${api.base}${result.sharePath}`);
+    assert.equal(shared.status, 200);
+    assert.deepEqual(Buffer.from(await shared.arrayBuffer()), Buffer.from(PROVIDER_PNG, 'base64'));
+  } finally { await api.close(); }
+});
+
+test('a picture the share copy cannot handle is still delivered to the child', async () => {
+  // Each of these is a successful generation whose share copy must fail.
+  for (const provider of [
+    // Not an image once decoded: 'a' is not a PNG.
+    async () => ({ ok: true, json: async () => ({ data: [{ b64_json: 'YQ==' }] }) }),
+    // An https result whose host refuses the copy.
+    async (url) => (url.includes('images.example')
+      ? { ok: false, headers: new Headers() }
+      : { ok: true, json: async () => ({ data: [{ url: 'https://images.example/gone.png' }] }) }),
+    // An https result that answers with something that is not an image.
+    async (url) => (url.includes('images.example')
+      ? { ok: true, headers: new Headers({ 'content-type': 'text/html' }), body: new Blob(['<html>']).stream() }
+      : { ok: true, json: async () => ({ data: [{ url: 'https://images.example/page.html' }] }) }),
+  ]) {
+    const api = await harness({ fetcher: provider });
+    try {
+      const { code } = await withCode(api);
+      const response = await api.generate(code);
+      assert.equal(response.status, 200, 'the generation succeeded and must not be thrown away');
+      const result = await body(response);
+      assert.ok(result.image, 'the child still gets the picture, and can still download it');
+      assert.ok(!('sharePath' in result), 'only the QR metadata is left out');
+      assert.ok(!('shareExpiresAt' in result));
+    } finally { await api.close(); }
+  }
+});
+
+test('phone sharing can be switched off, and then no link exists at all', async () => {
+  const api = await harness({ fetcher: pngProvider, env: { IMAGE_SHARE_MAX_ITEMS: '0' } });
+  try {
+    const { code } = await withCode(api);
+    const result = await body(await api.generate(code));
+    assert.ok(result.image);
+    assert.ok(!('sharePath' in result));
+    const response = await fetch(`${api.base}/api/shared-image/${'A'.repeat(43)}`);
+    assert.equal(response.status, 404);
+  } finally { await api.close(); }
+});
+
+test('only GET reaches a share link, and it holds at most the configured number', async () => {
+  const api = await harness({ fetcher: pngProvider, env: { IMAGE_SHARE_MAX_ITEMS: '2', IMAGE_MAX_CONCURRENCY: '1' } });
+  try {
+    const { code } = await withCode(api, { usageLimit: 10 });
+    const paths = [];
+    for (let index = 0; index < 4; index++) paths.push((await body(await api.generate(code))).sharePath);
+    assert.equal(api.server.shares.stats().count, 2, 'the oldest links are evicted, the table is not');
+    assert.equal((await fetch(`${api.base}${paths[0]}`)).status, 404);
+    assert.equal((await fetch(`${api.base}${paths[3]}`)).status, 200);
+
+    // A share link is a read, so nothing else is allowed through it.
+    for (const method of ['POST', 'PUT', 'DELETE']) {
+      const response = await fetch(`${api.base}${paths[3]}`, { method, headers: { Origin: ORIGIN } });
+      assert.equal(response.status, 404, `${method} must not reach a share`);
+    }
+  } finally { await api.close(); }
+});
+
+test('a share token and the picture bytes are never logged', async () => {
+  const written = [];
+  const original = { log: console.log, warn: console.warn, error: console.error };
+  for (const level of ['log', 'warn', 'error']) console[level] = (...args) => written.push(args.join(' '));
+  const api = await harness({ fetcher: pngProvider });
+  try {
+    const { code } = await withCode(api);
+    const { sharePath } = await body(await api.generate(code));
+    const token = sharePath.split('/').pop();
+    await fetch(`${api.base}${sharePath}`);
+    await fetch(`${api.base}/api/shared-image/${'B'.repeat(43)}`);
+    const log = written.join('\n');
+    for (const secret of [token, PROVIDER_PNG, code]) {
+      assert.ok(!log.includes(secret), `the log must not contain ${secret.slice(0, 12)}`);
+    }
+  } finally {
+    Object.assign(console, original);
+    await api.close();
   }
 });
