@@ -81,6 +81,9 @@ an admin panel in front of thirty children.
 - Open **Let AI create** and confirm the workshop-code field appears. If it says "Picture making is
   not connected yet", the frontend was built without `VITE_IMAGE_ENDPOINT` — that needs a rebuild,
   not a restart.
+- If children will use the QR handoff, check that a phone on the room's Wi-Fi (or on mobile data)
+  can actually reach the backend's https origin. The QR points at the backend, not at the site, and
+  a guest network that blocks it is the one thing that breaks this feature silently.
 
 Doing this once per device before the workshop is the single biggest reliability win. A browser may
 cache the models, making later loads faster — but caching is not a guarantee, so keep network
@@ -112,6 +115,14 @@ reaches a workshop screen.
 | "Picture making is not ready right now." | Backend `503` — provider not configured, or the store is unreadable | Check `/api/health` |
 | "That took too long. Please try again." | 240 s client timeout | Usually load. Retry once |
 
+| "This phone link has expired. Create a new picture to get a new one." | The QR link's ~30-minute life ran out, or the backend restarted | Expected. The picture is still on screen and still downloadable; a new generation gives a new link |
+
+**Phone handoff.** After a picture is made, children can scan the QR code under **📱 Save it on
+your phone** instead of downloading to the booth machine. The link lives about 30 minutes, works
+without the workshop code (the phone does not have one), and dies if the backend restarts. Nothing
+is published: the link is unguessable and temporary, and the picture is never written to the
+backend's disk.
+
 **Keep an adult watching the screen.** The usage limits exist partly so a bad result can be stopped
 by revoking a code rather than by waiting for anything to time out.
 
@@ -140,11 +151,17 @@ from me?"
 - The percentages next to a guess are **class scores, not calibrated probabilities.**
 - On the Learn page, "Show me" uses a picture the AI already learned from, and says so on screen.
   "Or draw something new" is the genuinely unseen test.
-- **Reset AI** clears every example, category and score on that device, and confirms first.
+- **Reset AI** clears every example, category and score on that device — and the latest generated
+  picture with them — and confirms first. Run it between groups at a booth.
+- The latest generated picture stays on the device until then: a child can wander to another
+  challenge and come back to it, and it survives a page reload. Only the most recent one is kept.
+- The workshop code is hidden behind dots, with a **Show** button. Children who mistype it can check
+  what they typed; remind them to hide it again if the screen is shared.
 - Point out the notice above Let AI create: it is the moment the workshop's local/hosted distinction
   stops being abstract.
 
-**Do not redeploy during a class.** It drops queued generations and signs teachers out.
+**Do not redeploy during a class.** It drops queued generations, signs teachers out, and
+invalidates every QR phone link handed out so far (codes and usage counters survive).
 
 ---
 
@@ -183,3 +200,4 @@ flowchart LR
 - [Picture making](image-generation.md) — codes, limits, safety and model compatibility in detail.
 - [Deployment](deployment.md) — topology, environment variables, redeploy and rollback.
 - [Architecture](architecture.md) — what runs where.
+- [Workshop feedback](workshop-feedback.md) — observations from real sessions, and what they changed.

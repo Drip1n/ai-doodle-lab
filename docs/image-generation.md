@@ -93,6 +93,76 @@ serialised critical section — never when a request merely arrives.
 Re-validating after leaving the queue is what makes a mid-workshop revoke effective: a request that
 was already waiting is still refused.
 
+## Phone handoff: the temporary share link
+
+A booth machine is not the child's device, so "Download my picture" saves the picture somewhere they
+will never see again. After a successful generation the panel therefore also shows a QR code, and
+scanning it opens the picture on their own phone.
+
+A QR code cannot carry a `blob:` or `data:` URL — the phone is a different device — so the picture
+needs a URL of ours. `server/imageShares.mjs` provides exactly that and nothing more.
+
+| Property | Value |
+| --- | --- |
+| Where the bytes live | Process memory. **Never** written to disk, never added to the code store. |
+| Token | 32 random bytes as `base64url` (43 characters, 256 bits). Encodes nothing: no code, no category, no timestamp. |
+| TTL | `IMAGE_SHARE_TTL_MS`, default 30 minutes. |
+| How many at once | `IMAGE_SHARE_MAX_ITEMS`, default 40. `0` switches sharing off entirely. |
+| How much at once | 8 MB per picture, 64 MB in total. Expired entries are swept; the oldest are evicted when either ceiling is reached. |
+| Survives a restart | **No.** Every link dies with the process; this is intentional and is why nothing has to be cleaned up. |
+| Auth | None, by design. The phone that scans the QR has no workshop code. The random token is the whole capability. |
+
+### The response
+
+A successful `POST /api/generate-image` keeps its existing `image` field and adds two more when a
+share could be made:
+
+```json
+{ "image": "data:image/png;base64,...", "sharePath": "/api/shared-image/<token>", "shareExpiresAt": 1791055617974 }
+```
+
+`GET /api/shared-image/<token>` answers the image itself — the simplest thing that works on a phone,
+since a browser shows it and a long press saves it:
+
+- `Content-Type` sniffed from the actual bytes (PNG, JPEG or WebP only), `Content-Disposition:
+  inline; filename="ai-doodle-cat.png"`, `Cache-Control: no-store`, `X-Content-Type-Options:
+  nosniff`.
+- Unknown, malformed and expired tokens all get the same generic `404 {"error":"Not found"}` that an
+  unknown path gets. Nothing distinguishes them.
+- It is the one route that is not bound to `APP_ORIGIN`: a phone opens it from another device, and a
+  top-level navigation carries no `Origin` header. No `Access-Control-Allow-Origin` is set on it, so
+  another site's JavaScript still cannot read the bytes.
+- `GET` only. Every other method falls through to the same `404`.
+
+### Normalising the share copy
+
+The generation adapters can return either an inline `data:` image or an `https:` URL on the
+provider's own host, and the QR has to work for both.
+
+- A `data:` image is decoded straight into the share table.
+- An `https:` result is fetched **once**, server-side, with a 15 s timeout, an 8 MB ceiling enforced
+  while reading, and a content type that must be an image — and is then checked again by magic
+  bytes, so a host that mislabels its response cannot make us serve an HTML or SVG document from our
+  own origin. Only the bytes are kept; the provider's URL is never handed out as our share link.
+- That is one extra image download, never a second generation. A picture is still billed once.
+
+**Sharing never endangers the picture.** If the copy fails for any reason — not an image, too big,
+the host refused, sharing switched off — the generation response goes out exactly as before, simply
+without `sharePath` and `shareExpiresAt`. The frontend then shows no QR section at all, and
+"Download my picture" is unaffected.
+
+### In the browser
+
+The QR is drawn in the page by `qrcode.react` (no QR web service, so nothing about a child's picture
+is handed to another third party). The absolute URL is built from the configured
+`VITE_IMAGE_ENDPOINT`: an absolute endpoint gives the backend's origin, a relative one means the
+backend is this same site. No hostname is hardcoded. A `sharePath` that does not match
+`/api/shared-image/<43 token characters>` exactly is dropped rather than turned into a URL.
+
+The section is shown only for a real generated picture with live share metadata — never in demo
+mode, never before a picture, never when the share failed. When the link expires while the panel is
+open, the QR is replaced by *"This phone link has expired. Create a new picture to get a new one."*
+
 ## Persistence
 
 Codes and their usage counters live in one JSON file, written atomically (temp file in the same
@@ -143,7 +213,8 @@ authenticated on the server.
 | `GET /api/admin/codes` | session | Masked codes and operational metadata only. |
 | `POST /api/admin/codes` | session | `{ label, expiresInHours, usageLimit }`. The only response carrying a plaintext code. |
 | `POST /api/admin/codes/:id/revoke` | session | Idempotent. |
-| `POST /api/generate-image` | workshop code | `X-Workshop-Code` header. |
+| `POST /api/generate-image` | workshop code | `X-Workshop-Code` header. Answers `image`, plus `sharePath` and `shareExpiresAt` when a phone copy was made. |
+| `GET /api/shared-image/:token` | the token itself | The temporary phone copy. No code, no cookie, no origin binding; generic `404` for anything it does not hold. |
 | `GET /api/health` | — | Booleans only; never a key, a code or an email. |
 
 `TRUST_PROXY=1` is required when a reverse proxy sits in front, so the left-most `X-Forwarded-For`
@@ -186,12 +257,16 @@ the provider is not hit with fifteen at once.
 - `IMAGE_CODE_RATE_LIMIT` (default 30 per `IMAGE_CODE_RATE_WINDOW_MS`, per code) is a burst
   ceiling. Thirty per minute leaves a class of fifteen plenty of room while stopping a script; one
   class's burst never affects another's.
+- Phone-handoff shares are held in memory only, bounded by `IMAGE_SHARE_MAX_ITEMS` (40) and 64 MB,
+  expire after `IMAGE_SHARE_TTL_MS` (30 minutes), and vanish on restart. The token is 256 random
+  bits and carries no information; the route logs neither token nor bytes.
 - Kept from before: 3 MB request cap (the connection is cut, not buffered), 1–4 references, PNG
   header and dimension checks, 180-character ideas, 60-character category names, exact-origin CORS,
   an https-only provider base, and output validation of the returned image.
-- The server stores **no** drawings, prompts or generated images. Generation input is processed
-  transiently; the only thing written to disk is workshop-code metadata. Drawings stay in the
-  browser's IndexedDB, as before.
+- The server writes **no** drawings, prompts or generated images to disk. Generation input is
+  processed transiently; the only thing written to disk is workshop-code metadata. Drawings stay in
+  the browser's IndexedDB, as before, and so does the child's latest generated picture — only the
+  latest one, and only when it is inline image data.
 - Nothing logs a provider key, a password, a full workshop code or a student image. There is a test
   that asserts it.
 
@@ -275,7 +350,8 @@ Required for Live mode: `APP_ORIGIN`, `PORTKEY_API_KEY`, `IMAGE_MODEL`, `IMAGE_O
 `WORKSHOP_STORE_PATH` on a path that survives redeploys, `TRUST_PROXY=1` behind a proxy, and the
 concurrency/limit variables. Optional: `PORT`, `HOST`, `PORTKEY_BASE_URL`, `PORTKEY_PROVIDER`,
 `IMAGE_QUALITY`, `IMAGE_SIZE`, `WORKSHOP_CODE_PREFIX`, `ADMIN_COOKIE_SECURE`,
-`ADMIN_SESSION_TTL_MS`, `ADMIN_MAX_FAILURES`, `ADMIN_LOCKOUT_MS`. `.env.server.example` lists every
+`ADMIN_SESSION_TTL_MS`, `ADMIN_MAX_FAILURES`, `ADMIN_LOCKOUT_MS`, `IMAGE_SHARE_TTL_MS`,
+`IMAGE_SHARE_MAX_ITEMS`. `.env.server.example` lists every
 one with a safe placeholder. No session secret is needed: tokens are random and held server-side.
 
 ### Cross-origin versus same-origin
@@ -315,6 +391,11 @@ npm run test:server  # node --test: store, codes, admin auth, queue, HTTP, scrip
 npm run build        # type-check + production build
 npm run test:e2e     # Playwright, real browser
 ```
+
+`npm run test:server` also covers the share table (token entropy and format, expiry, eviction by
+age, count and bytes), the share route (correct bytes and headers, one generic 404, GET only,
+nothing on disk, nothing logged) and share normalisation (both provider shapes, bounded external
+fetch, a failed copy never costing the child their picture).
 
 `npm run test:server` covers workshop-code validity and revocation, randomness and
 plaintext-never-stored, persistence across a restart, a malformed store failing closed, admin
